@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  auth-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi-auth-app-prod
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://auth_user:auth_password@postgres:5432/auth_db
+      - SECRET_KEY=${SECRET_KEY}  # Обязательно в production!
+      - SMS_API_KEY=${SMS_API_KEY}
+      - SMS_API_URL=${SMS_API_URL}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=120
+      - SMS_CODE_EXPIRE_MINUTES=10
+      - BCRYPT_ROUNDS=12
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth-api.rule=Host(`auth.yourdomain.com`)"
+
+  postgres:
+    image: postgres:15
+    container_name: auth-postgres-prod
+    environment:
+      - POSTGRES_DB=auth_db
+      - POSTGRES_USER=auth_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    restart: unless-stopped
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+      -c max_connections=200
+
+  redis:
+    image: redis:7-alpine
+    container_name: auth-redis-prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_prod:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+volumes:
+  postgres_data_prod:
+  redis_data_prod:
+
+networks:
+  default:
+    name: auth-network

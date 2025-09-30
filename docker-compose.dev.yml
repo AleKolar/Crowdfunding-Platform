@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  auth-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi-auth-app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./auth.db
+      - SMS_CODE_EXPIRE_MINUTES=10
+      - ACCESS_TOKEN_EXPIRE_MINUTES=120
+      - BCRYPT_ROUNDS=12
+      # SECRET_KEY будет сгенерирован автоматически если не указан
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+    volumes:
+      # Mount для hot-reload в разработке
+      - .:/app
+      # Volume для базы данных
+      - auth_data:/app/data
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+        - action: rebuild
+          file: requirements.txt
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL для production (опционально)
+  postgres:
+    image: postgres:15
+    container_name: auth-postgres
+    environment:
+      - POSTGRES_DB=auth_db
+      - POSTGRES_USER=auth_user
+      - POSTGRES_PASSWORD=auth_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  auth_data:
+  postgres_data:
