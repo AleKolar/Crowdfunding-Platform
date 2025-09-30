@@ -21,7 +21,7 @@ class NotificationResponse(NotificationBase):
     user_id: int
     is_read: bool
     is_sent: bool
-    metadata: Optional[Dict[str, Any]]
+    meta_data: Optional[Dict[str, Any]]
     created_at: datetime
     read_at: Optional[datetime]
     sent_at: Optional[datetime]

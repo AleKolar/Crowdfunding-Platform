@@ -1,11 +1,5 @@
 # src/database/models/__init__.py
 from .base import Base
-from .auth_models import User, SMSVerificationCode
-from .user_models import UserProfile, UserSettings, Subscription
-from .content_models import Project, Post, Like, Repost
-from .webinar_models import Webinar, WebinarRegistration
-from .payment_models import Donation, Transaction, Wallet, PayoutRequest
-from .notification_models import Notification, NotificationTemplate, UserNotificationSettings, EmailQueue
 
 # Экспортируем все модели для Alembic
 __all__ = [
@@ -17,3 +11,10 @@ __all__ = [
     'Donation', 'Transaction', 'Wallet', 'PayoutRequest',
     'Notification', 'NotificationTemplate', 'UserNotificationSettings', 'EmailQueue'
 ]
+
+from .models_auth import User, SMSVerificationCode
+from .models_content import Project, Post, Like, Repost
+from .models_notification import Notification, NotificationTemplate, UserNotificationSettings, EmailQueue
+from .models_payment import Donation, Transaction, Wallet, PayoutRequest
+from .models_user import UserProfile, UserSettings, Subscription
+from .models_webinar import Webinar, WebinarRegistration

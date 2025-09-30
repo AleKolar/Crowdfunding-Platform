@@ -30,9 +30,9 @@ class Notification(Base):
     # Метаданные для отображения
     action_url = Column(String, nullable=True)  # URL для перехода
     image_url = Column(String, nullable=True)  # Изображение уведомления
-    metadata = Column(JSON)  # Дополнительные данные
+    meta_data = Column(JSON)  # Дополнительные данные
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
     read_at = Column(DateTime, nullable=True)
     sent_at = Column(DateTime, nullable=True)
 
@@ -79,8 +79,8 @@ class UserNotificationSettings(Base):
     sms_webinar_reminders = Column(Boolean, default=False)
     sms_important_updates = Column(Boolean, default=False)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     user = relationship("User")
 

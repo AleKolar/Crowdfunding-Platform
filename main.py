@@ -1,16 +1,17 @@
 from contextlib import asynccontextmanager
+from typing import cast, Any
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 import os
 import time
-import asyncio
 
-from src.database.postgres import create_tables, delete_tables, engine
+
+from src.database.postgres import create_tables, engine
 from src.database.redis_client import redis_manager
 
 # Инициализация лимитера для rate limiting
@@ -86,9 +87,6 @@ app = FastAPI(
     redoc_url=None,  # Отключаем ReDoc, используем только Swagger
 )
 
-# Добавляем лимитер в состояние приложения
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # Middleware
@@ -121,7 +119,7 @@ async def add_cache_headers(request: Request, call_next):
 
 # Основные middleware
 app.add_middleware(
-    CORSMiddleware,
+    cast(Any, CORSMiddleware),
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -134,7 +132,7 @@ app.add_middleware(
 )
 
 app.add_middleware(
-    TrustedHostMiddleware,
+    cast(Any, TrustedHostMiddleware),
     allowed_hosts=[
         "localhost",
         "127.0.0.1",
@@ -145,7 +143,7 @@ app.add_middleware(
 
 # Rate limiting middleware (только для production)
 if os.getenv("ENVIRONMENT") == "production":
-    app.add_middleware(SlowAPIMiddleware)
+    app.add_middleware(cast(Any, SlowAPIMiddleware))
 
 
 # Health check endpoint
@@ -212,3 +210,10 @@ async def get_online_users_count():
         return len(keys)
     except:
         return 0
+
+# ПРОСТОЙ ЗАПУСК
+# Запуск Redis контейнера
+# docker run -d --name redis-server -p 6379:6379 redis:7-alpine
+
+# Проверка
+# docker ps

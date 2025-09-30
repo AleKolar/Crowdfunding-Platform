@@ -38,14 +38,14 @@ class Transaction(Base):
     payment_provider = Column(String)  # stripe, yookassa, tinkoff
     provider_transaction_id = Column(String, nullable=True)  # ID транзакции в платежной системе
     description = Column(Text, nullable=True)
-    metadata = Column(JSON)  # Дополнительные данные платежа
+    meta_data = Column(JSON)
 
     # Для выводов средств
     wallet_address = Column(String, nullable=True)
     bank_account = Column(String, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
     # Связи
@@ -85,8 +85,8 @@ class PayoutRequest(Base):
     destination = Column(String)  # номер карты, счет, кошелек
     fee = Column(Float, default=0.0)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     processed_at = Column(DateTime, nullable=True)
 
     wallet = relationship("Wallet")
