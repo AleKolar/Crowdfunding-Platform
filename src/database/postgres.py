@@ -1,10 +1,7 @@
 # src/database/postgres.py
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
 from src.config.settings import settings
-
-# Базовый класс для моделей
-Base = declarative_base()
+from .models import Base  # Импортируем из объединенных моделей
 
 # Асинхронный engine
 engine = create_async_engine(
@@ -42,7 +39,7 @@ async def create_tables():
     """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("✅ Таблицы PostgreSQL созданы")
+    print("✅ Все таблицы созданы")
 
 async def delete_tables():
     """
@@ -50,4 +47,4 @@ async def delete_tables():
     """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    print("🗑️ Таблицы PostgreSQL удалены")
+    print("🗑️ Все таблицы удалены")
