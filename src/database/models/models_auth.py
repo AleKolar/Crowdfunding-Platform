@@ -26,6 +26,10 @@ class User(Base):
     sms_codes = relationship("SMSVerificationCode", back_populates="user")
     projects = relationship("Project", back_populates="creator")
     donations = relationship("Donation", back_populates="donor")
+    posts = relationship("Post", back_populates="author")
+    comments = relationship("Comment", back_populates="user")
+    likes = relationship("Like", back_populates="user")
+    reposts = relationship("Repost", back_populates="user")
 
     # Явные связи для подписок
     subscriptions_as_subscriber = relationship(

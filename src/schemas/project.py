@@ -1,5 +1,5 @@
 # src/schemas/project.py
-from pydantic import BaseModel, validator, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -45,6 +45,13 @@ class ProjectMediaCreate(ProjectMediaBase):
     project_id: int
 
 
+class ProjectMediaUpdate(BaseModel):
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+    file_name: Optional[str] = None
+    is_approved: Optional[bool] = None
+
+
 class ProjectMediaResponse(ProjectMediaBase):
     id: int
     project_id: int
@@ -82,7 +89,7 @@ class ProjectCreate(ProjectBase):
         return v
 
 
-class ProjectUpdate(BaseModel):
+class ProjectUpdate(BaseModel):  # ← ОБНОВЛЕНИЕ ДАННЫХ ПРОЕКТА
     title: Optional[str] = None
     description: Optional[str] = None
     short_description: Optional[str] = None
@@ -96,6 +103,14 @@ class ProjectUpdate(BaseModel):
     tags: Optional[List[str]] = None
     status: Optional[ProjectStatus] = None
     is_featured: Optional[bool] = None
+    goal_amount: Optional[float] = None
+    end_date: Optional[datetime] = None
+
+    @field_validator('goal_amount')
+    def validate_goal_amount(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError('Целевая сумма должна быть больше 0')
+        return v
 
 
 class ProjectResponse(ProjectBase):
@@ -195,6 +210,14 @@ class PostMediaCreate(PostMediaBase):
     post_id: int
 
 
+class PostMediaUpdate(BaseModel):
+    file_url: Optional[str] = None
+    file_type: Optional[MediaType] = None
+    file_name: Optional[str] = None
+    sort_order: Optional[int] = None
+    description: Optional[str] = None
+
+
 class PostMediaResponse(PostMediaBase):
     id: int
     post_id: int
@@ -215,6 +238,11 @@ class CommentBase(BaseModel):
 
 class CommentCreate(CommentBase):
     post_id: int
+
+
+class CommentUpdate(BaseModel):
+    content: Optional[str] = None
+    parent_id: Optional[int] = None
 
 
 class CommentResponse(CommentBase):
@@ -250,9 +278,57 @@ class RepostResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+# Схемы для ОБНОВЛЕНИЙ ПРОЕКТА (НОВОСТЕЙ) !
+class ProjectNewsBase(BaseModel):  #
+    title: str
+    content: str
+    is_public: bool = True
+
+class ProjectNewsCreate(ProjectNewsBase):  #
+    project_id: int
+
+class ProjectNewsUpdate(BaseModel):  #
+    title: Optional[str] = None
+    content: Optional[str] = None
+    is_public: Optional[bool] = None
+
+class ProjectNewsResponse(ProjectNewsBase):  #
+    id: int
+    project_id: int
+    created_at: datetime
+    updated_at: datetime
+    media: List['NewsMediaResponse'] = []  #
+
+    model_config = ConfigDict(from_attributes=True)
+
+# Схемы для медиа обновлений - ПЕРЕИМЕНОВАНО!
+class NewsMediaBase(BaseModel):  #
+    file_url: str
+    file_type: MediaType
+    file_name: str
+
+class NewsMediaCreate(NewsMediaBase):  #
+    update_id: int  # Осторожно! Это ссылается на project_updates.id
+
+class NewsMediaUpdate(BaseModel):  #
+    file_url: Optional[str] = None
+    file_type: Optional[MediaType] = None
+    file_name: Optional[str] = None
+
+class NewsMediaResponse(NewsMediaBase):  #
+    id: int
+    update_id: int
+    file_size: Optional[int] = None
+    duration: Optional[int] = None
+    thumbnail_url: Optional[str] = None
+    mime_type: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 # Обновляем forward refs
 ProjectWithCreatorResponse.model_rebuild()
 PostWithAuthorResponse.model_rebuild()
 PostWithMediaResponse.model_rebuild()
 CommentWithUserResponse.model_rebuild()
+ProjectNewsResponse.model_rebuild()  # ← ОБНОВЛЕНО
