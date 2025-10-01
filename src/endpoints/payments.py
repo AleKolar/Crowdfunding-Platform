@@ -9,9 +9,13 @@ from src.services.payment_service import payment_service
 from src.security.auth import get_current_user
 
 
-payment_router = APIRouter(tags=["payment"], prefix="/payment")
+payments_router = APIRouter(
+    prefix="/payments",
+    tags=["payments"],
+    responses={404: {"description": "Not found"}}
+)
 
-@payment_router.post("/donate", response_model=PaymentIntentResponse)
+@payments_router.post("/donate", response_model=PaymentIntentResponse)
 async def create_donation(
         donation_data: DonationCreate,
         current_user=Depends(get_current_user),
@@ -33,7 +37,7 @@ async def create_donation(
     )
 
 
-@payment_router.post("/webhook")
+@payments_router.post("/webhook")
 async def stripe_webhook(request: Request):
     """Вебхук для обработки событий от Stripe"""
     payload = await request.body()
@@ -43,14 +47,14 @@ async def stripe_webhook(request: Request):
     return result
 
 
-@payment_router.get("/status/{payment_intent_id}")
+@payments_router.get("/status/{payment_intent_id}")
 async def get_payment_status(payment_intent_id: str):
     """Получение статуса платежа"""
     status_info = await payment_service.get_payment_status(payment_intent_id)
     return status_info
 
 
-@payment_router.post("/refund/{payment_intent_id}")
+@payments_router.post("/refund/{payment_intent_id}")
 async def create_refund(
         payment_intent_id: str,
         amount: Optional[float] = None,

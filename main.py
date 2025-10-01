@@ -4,6 +4,7 @@ from typing import cast, Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.openapi.utils import get_openapi
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
@@ -14,11 +15,15 @@ import time
 from src.database.postgres import create_tables, engine
 from src.database.redis_client import redis_manager
 from src.endpoints.auth import auth_router
-from src.endpoints.payments import payment_router
+from src.endpoints.payments import payments_router
 
 # Инициализация лимитера для rate limiting
 limiter = Limiter(key_func=get_remote_address)
 
+
+# Очистка кэша Swagger
+if os.path.exists("./openapi.json"):
+    os.remove("./openapi.json")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -213,7 +218,13 @@ async def get_online_users_count():
         return 0
 
 app.include_router(auth_router)
-app.include_router(payment_router)
+app.include_router(payments_router)
+
+print("🔍 Зарегистрированные пути:")
+for route in app.routes:
+    if hasattr(route, 'path'):
+        methods = getattr(route, 'methods', ['?'])
+        print(f"  {methods} {route.path}")
 
 
 # ПРОСТОЙ ЗАПУСК
@@ -222,3 +233,5 @@ app.include_router(payment_router)
 
 # Проверка
 # docker ps
+
+# uvicorn main:app --host 127.0.0.1 --port 8000 --reload

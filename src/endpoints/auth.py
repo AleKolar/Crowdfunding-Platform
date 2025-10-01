@@ -3,7 +3,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, Depends, HTTPException, status, APIRouter
+from fastapi import Depends, HTTPException, status, APIRouter
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,9 +19,12 @@ from src.security.auth import get_user_by_email, get_user_by_phone, get_password
 load_dotenv()
 
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 120))
-app = FastAPI(title="Secret Code + SMS 2FA Auth")
 
-auth_router = APIRouter(tags=["auth"], prefix="/auth")
+auth_router = APIRouter(
+    prefix="/auth",
+    tags=["authentication"],
+    responses={404: {"description": "Not found"}}
+)
 # Регистрация
 @auth_router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
