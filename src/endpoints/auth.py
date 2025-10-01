@@ -126,7 +126,7 @@ async def protected_data(current_user: models.User = Depends(get_current_user)):
 # Повторная отправка SMS кода
 @auth_router.post("/resend-sms")
 async def resend_sms(user_id: int, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
-    result: Any = await db.execute(select(models.User).where(models.User.id == user_id))
+    result = await db.execute(select(models.User).where(models.User.id == user_id))
     user = result.scalar_one_or_none()
 
     if user is None:

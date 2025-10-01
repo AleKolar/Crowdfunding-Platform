@@ -1,5 +1,5 @@
 # src/schemas/payment.py
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, field_validator
 from typing import Optional, Dict, Any
 from datetime import datetime
 
@@ -15,7 +15,7 @@ class DonationCreate(DonationBase):
     """Схема создания доната"""
     project_id: int
 
-    @validator('amount')
+    @field_validator('amount')
     def validate_amount(cls, v):
         if v <= 0:
             raise ValueError('Сумма доната должна быть больше 0')

@@ -3,6 +3,7 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 import secrets
@@ -113,13 +114,11 @@ def authenticate_user(db: Session, email: str, secret_code: str):
     return user
 
 
-async def generate_and_send_sms_code(db: Session, user: models.User):
+async def generate_and_send_sms_code(db: AsyncSession, user: models.User) -> str:
     """Генерация и отправка SMS кода"""
-    # Генерируем 6-значный код
     code = ''.join(secrets.choice('0123456789') for _ in range(6))
     expires_at = datetime.now() + timedelta(minutes=settings.SMS_CODE_EXPIRE_MINUTES)
 
-    # Сохраняем код в базу
     sms_code = models.SMSVerificationCode(
         user_id=user.id,
         phone=user.phone,
@@ -127,12 +126,10 @@ async def generate_and_send_sms_code(db: Session, user: models.User):
         expires_at=expires_at
     )
     db.add(sms_code)
-    db.commit()
-    db.refresh(sms_code)
+    await db.commit()
+    await db.refresh(sms_code)
 
-    # Отправляем SMS
     await sms_service.send_verification_code(user.phone, code)
-
     return code
 
 

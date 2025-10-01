@@ -4,22 +4,20 @@ from typing import cast, Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.openapi.utils import get_openapi
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
 import os
 import time
 
-
 from src.database.postgres import create_tables, engine
 from src.database.redis_client import redis_manager
 from src.endpoints.auth import auth_router
 from src.endpoints.payments import payments_router
+from src.endpoints.projects import projects_router
 
 # Инициализация лимитера для rate limiting
 limiter = Limiter(key_func=get_remote_address)
-
 
 # Очистка кэша Swagger
 if os.path.exists("./openapi.json"):
@@ -94,6 +92,30 @@ app = FastAPI(
     redoc_url=None,  # Отключаем ReDoc, используем только Swagger
 )
 
+app.add_middleware(
+    cast(Any, CORSMiddleware),
+    allow_origins=[
+        "http://localhost:8000",      # ← localhost на порту 8000
+        "http://127.0.0.1:8000",      # ← 127.0.0.1 на порту 8000
+        "http://localhost:8001",      # ← localhost на порту 8001
+        "http://127.0.0.1:8001",      # ← 127.0.0.1 на порту 8001
+    ] if os.getenv("ENVIRONMENT") == "production" else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
+    # expose_headers=["*"], # какие заголовки exposed to browser
+    # max_age=600,          # кеширование preflight requests (в секундах)
+)
+
+app.add_middleware(
+    cast(Any, TrustedHostMiddleware),
+    allowed_hosts=[
+        "localhost",
+        "127.0.0.1",
+        "yourdomain.com",
+        "api.yourdomain.com"
+    ] if os.getenv("ENVIRONMENT") == "production" else ["*"],
+)
 
 # Middleware
 @app.middleware("http")
@@ -122,30 +144,6 @@ async def add_cache_headers(request: Request, call_next):
 
     return response
 
-
-# Основные middleware
-app.add_middleware(
-    cast(Any, CORSMiddleware),
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://yourdomain.com"
-    ] if os.getenv("ENVIRONMENT") == "production" else ["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["X-Process-Time", "X-Total-Count"],
-)
-
-app.add_middleware(
-    cast(Any, TrustedHostMiddleware),
-    allowed_hosts=[
-        "localhost",
-        "127.0.0.1",
-        "yourdomain.com",
-        "api.yourdomain.com"
-    ] if os.getenv("ENVIRONMENT") == "production" else ["*"],
-)
 
 # Rate limiting middleware (только для production)
 if os.getenv("ENVIRONMENT") == "production":
@@ -220,6 +218,8 @@ async def get_online_users_count():
 app.include_router(auth_router)
 app.include_router(payments_router)
 
+app.include_router(projects_router)
+
 print("🔍 Зарегистрированные пути:")
 for route in app.routes:
     if hasattr(route, 'path'):
@@ -235,3 +235,6 @@ for route in app.routes:
 # docker ps
 
 # uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+
+# Удалите кэш если есть
+# rm -Force openapi.json - у меня, пока, нет

@@ -1,4 +1,4 @@
-#version: '3.8'
+#version: '3.8' - obsolete
 #
 #services:
 #  postgres:
@@ -73,7 +73,7 @@
 #  redis_data:
 
 # for dev
-version: '3.8'
+# version: '3.8' - obsolete
 
 services:
   postgres:
