@@ -16,8 +16,8 @@ class Donation(Base):
     is_anonymous = Column(Boolean, default=False)
     status = Column(String, default="completed")  # pending, completed, failed, refunded
     payment_method = Column(String, default="card")  # card, wallet, crypto
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Связи
     donor = relationship("User", back_populates="donations")
@@ -45,7 +45,7 @@ class Transaction(Base):
     bank_account = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     completed_at = Column(DateTime, nullable=True)
 
     # Связи
@@ -68,8 +68,8 @@ class Wallet(Base):
     payout_threshold = Column(Float, default=1000.0)  # Минимальная сумма для вывода
     auto_payout = Column(Boolean, default=False)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     user = relationship("User")
 

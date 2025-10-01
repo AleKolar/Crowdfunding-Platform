@@ -1,7 +1,7 @@
 # src/database/models/auth_models.py
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from .base import Base
 
 class User(Base):
@@ -15,7 +15,7 @@ class User(Base):
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     is_2fa_enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
     last_login = Column(DateTime, nullable=True)
 
     # Связи с другими таблицами
@@ -23,11 +23,22 @@ class User(Base):
     settings = relationship("UserSettings", back_populates="user", uselist=False)
     notification_settings = relationship("UserNotificationSettings", back_populates="user", uselist=False)
     wallet = relationship("Wallet", back_populates="user", uselist=False)
-    profile = relationship("UserProfile", back_populates="user", uselist=False)
-    settings = relationship("UserSettings", back_populates="user", uselist=False)
     sms_codes = relationship("SMSVerificationCode", back_populates="user")
     projects = relationship("Project", back_populates="creator")
     donations = relationship("Donation", back_populates="donor")
+
+    # Явные связи для подписок
+    subscriptions_as_subscriber = relationship(
+        "Subscription",
+        primaryjoin="User.id == Subscription.subscriber_id",
+        back_populates="subscriber"
+    )
+
+    subscriptions_as_creator = relationship(
+        "Subscription",
+        primaryjoin="User.id == Subscription.creator_id",
+        back_populates="creator"
+    )
 
 
 class SMSVerificationCode(Base):
@@ -37,7 +48,7 @@ class SMSVerificationCode(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     phone = Column(String)
     code = Column(String(6))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
     expires_at = Column(DateTime)
     is_used = Column(Boolean, default=False)
     attempt_count = Column(Integer, default=0)

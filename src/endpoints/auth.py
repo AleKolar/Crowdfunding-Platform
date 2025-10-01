@@ -1,25 +1,29 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+import os
+from typing import Any
+
+from dotenv import load_dotenv
+
+from fastapi import FastAPI, Depends, HTTPException, status, APIRouter
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from datetime import timedelta
-from pydantic import BaseModel, EmailStr
-from typing import Optional
 
-import models
-from database import get_db, engine
-from auth import (
-    authenticate_user, create_access_token, get_password_hash,
-    generate_and_send_sms_code, verify_sms_code, get_current_user,
-    ACCESS_TOKEN_EXPIRE_MINUTES, oauth2_scheme
-)
+from src.database import models
+from src.database.postgres import get_db
+from src.schemas import UserRegister, LoginResponse, Verify2FARequest, TokenResponse
+from src.security.auth import get_user_by_email, get_user_by_phone, get_password_hash, authenticate_user, \
+    generate_and_send_sms_code, verify_sms_code, create_access_token, get_current_user
 
-models.Base.metadata.create_all(bind=engine)
+load_dotenv()
 
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 120))
 app = FastAPI(title="Secret Code + SMS 2FA Auth")
 
-
+auth_router = APIRouter(tags=["auth"], prefix="/auth")
 # Регистрация
-@app.post("/register", status_code=status.HTTP_201_CREATED)
+@auth_router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     # Проверяем существование пользователя (используем новые функции)
     if get_user_by_email(db, user_data.email):
@@ -51,7 +55,7 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     }
 
 # Первый этап аутентификации
-@app.post("/login")
+@auth_router.post("/login")
 async def login(
         form_data: OAuth2PasswordRequestForm = Depends(),
         db: Session = Depends(get_db)
@@ -78,7 +82,7 @@ async def login(
 
 
 # Второй этап - верификация SMS кода
-@app.post("/verify-2fa")
+@auth_router.post("/verify-2fa")
 async def verify_2fa(
         request: Verify2FARequest,
         db: Session = Depends(get_db)
@@ -106,7 +110,7 @@ async def verify_2fa(
 
 
 # Защищенный эндпоинт
-@app.get("/protected-data")
+@auth_router.get("/protected-data")
 async def protected_data(current_user: models.User = Depends(get_current_user)):
     return {
         "message": "Доступ к защищенным данным разрешен",
@@ -117,10 +121,12 @@ async def protected_data(current_user: models.User = Depends(get_current_user)):
 
 
 # Повторная отправка SMS кода
-@app.post("/resend-sms")
-async def resend_sms(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
+@auth_router.post("/resend-sms")
+async def resend_sms(user_id: int, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    result: Any = await db.execute(select(models.User).where(models.User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if user is None:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
     await generate_and_send_sms_code(db, user)

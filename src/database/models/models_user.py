@@ -1,7 +1,7 @@
 # src/database/models/user_models.py
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from .base import Base
 
 
@@ -15,8 +15,8 @@ class UserProfile(Base):
     bio = Column(Text, nullable=True)
     website = Column(String, nullable=True)
     location = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     user = relationship("User", back_populates="profile")
 
@@ -43,7 +43,24 @@ class Subscription(Base):
     id = Column(Integer, primary_key=True, index=True)
     subscriber_id = Column(Integer, ForeignKey("users.id"))
     creator_id = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
-    subscriber = relationship("User", foreign_keys=[subscriber_id], backref="subscriptions_made")
-    creator = relationship("User", foreign_keys=[creator_id], backref="subscribers")
+    # IDE "ругается" ,ТО ЖЕ, на foreign_keys, но работает
+    subscriber = relationship(
+        "User",
+        foreign_keys=[subscriber_id],
+        back_populates="subscriptions_as_subscriber"
+    )
+
+    creator = relationship(
+        "User",
+        foreign_keys=[creator_id],
+        back_populates="subscriptions_as_creator"
+    )
+
+    # IDE "ругается" на типы в foreign_keys, но , вроде, работает
+    # subscriber = relationship("User", foreign_keys=[subscriber_id], back_populates="subscriptions_made")
+    # creator = relationship("User", foreign_keys=[creator_id], back_populates="subscribers")
+    # IDE "ругается" на типы в foreign_keys
+    # subscriber = relationship("User", foreign_keys=[subscriber_id], backref="subscriptions_made")
+    # creator = relationship("User", foreign_keys=[creator_id], backref="subscribers")

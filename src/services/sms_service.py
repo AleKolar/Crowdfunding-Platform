@@ -1,6 +1,6 @@
 import logging
-from typing import Optional
-import requests
+
+
 
 # Логирование
 logger = logging.getLogger(__name__)

@@ -40,6 +40,7 @@ class Settings:
 
     @property
     def DATABASE_URL(self) -> str:
+        """Асинхронный URL для FastAPI с asyncpg"""
         return (
             f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@"
             f"{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"

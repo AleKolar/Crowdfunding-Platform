@@ -6,10 +6,11 @@ from fastapi import HTTPException, status, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 import secrets
-import models
-from database import get_db
-from sms_service import sms_service
-from config import settings
+
+from src.config.settings import settings
+from src.database import models
+from src.database.postgres import get_db
+from src.services.sms_service import sms_service
 
 # Используем настройки из config
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -26,9 +27,9 @@ def get_password_hash(password):
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode.update({
         "exp": expire,
@@ -116,7 +117,7 @@ async def generate_and_send_sms_code(db: Session, user: models.User):
     """Генерация и отправка SMS кода"""
     # Генерируем 6-значный код
     code = ''.join(secrets.choice('0123456789') for _ in range(6))
-    expires_at = datetime.utcnow() + timedelta(minutes=settings.SMS_CODE_EXPIRE_MINUTES)
+    expires_at = datetime.now() + timedelta(minutes=settings.SMS_CODE_EXPIRE_MINUTES)
 
     # Сохраняем код в базу
     sms_code = models.SMSVerificationCode(
@@ -138,7 +139,7 @@ async def generate_and_send_sms_code(db: Session, user: models.User):
 def verify_sms_code(db: Session, user_id: int, code: str):
     """Верификация SMS кода"""
     # ✅ SQLAlchemy 2.x стиль
-    now = datetime.utcnow()
+    now = datetime.now()
 
     sms_code = db.scalar(
         select(models.SMSVerificationCode).where(
@@ -179,7 +180,7 @@ def get_user_by_phone(db: Session, phone: str) -> Optional[models.User]:
 def cleanup_expired_sms_codes(db: Session):
     """Очистка просроченных SMS кодов"""
     # ✅ SQLAlchemy 2.x стиль
-    now = datetime.utcnow()
+    now = datetime.now()
     expired_codes = db.scalars(
         select(models.SMSVerificationCode).where(
             models.SMSVerificationCode.expires_at < now

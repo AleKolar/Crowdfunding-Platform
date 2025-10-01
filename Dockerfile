@@ -3,9 +3,11 @@ FROM python:3.11-slim as builder
 
 WORKDIR /app
 
-# Установка системных зависимостей
+# Установка системных зависимостей для psycopg2 и других пакетов
 RUN apt-get update && apt-get install -y \
     gcc \
+    g++ \
+    postgresql-dev \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -18,10 +20,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Установка только runtime зависимостей
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Копирование Python пакетов из builder stage
 COPY --from=builder /root/.local /root/.local
 
-# Создание non-root пользователя для безопасности
+# Создание non-root пользователя
 RUN useradd --create-home --shell /bin/bash app \
     && chown -R app:app /app
 USER app
@@ -34,7 +41,6 @@ ENV PATH=/root/.local/bin:$PATH
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Порт приложения
 EXPOSE 8000
 
 # Health check

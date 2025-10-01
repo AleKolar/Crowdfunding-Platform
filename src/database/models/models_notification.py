@@ -51,8 +51,8 @@ class NotificationTemplate(Base):
     push_template = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class UserNotificationSettings(Base):
@@ -100,8 +100,8 @@ class EmailQueue(Base):
     max_retries = Column(Integer, default=3)
     error_message = Column(Text, nullable=True)
 
-    scheduled_for = Column(DateTime, default=datetime.utcnow)
+    scheduled_for = Column(DateTime, default=datetime.now)
     sent_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
     user = relationship("User")

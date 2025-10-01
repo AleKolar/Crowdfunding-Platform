@@ -19,16 +19,14 @@ class Project(Base):
     tags = Column(JSON)  # Список тегов
     status = Column(String, default="draft")  # draft, active, completed, cancelled
     creator_id = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     end_date = Column(DateTime)
     is_featured = Column(Boolean, default=False)
 
     creator = relationship("User", back_populates="projects")
     posts = relationship("Post", back_populates="project")
     webinars = relationship("Webinar", back_populates="project")
-    donations = relationship("Donation", back_populates="project")
-
     donations = relationship("Donation", back_populates="project")
 
 class Post(Base):
@@ -41,8 +39,8 @@ class Post(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     post_type = Column(String, default="update")  # update, milestone, news
     is_pinned = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     author = relationship("User")
     project = relationship("Project", back_populates="posts")
@@ -56,7 +54,7 @@ class Like(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     post_id = Column(Integer, ForeignKey("posts.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
     user = relationship("User")
     post = relationship("Post", back_populates="likes")
@@ -68,7 +66,7 @@ class Repost(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     original_post_id = Column(Integer, ForeignKey("posts.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
     user = relationship("User")
     original_post = relationship("Post", back_populates="reposts")
