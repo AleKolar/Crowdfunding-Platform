@@ -1,5 +1,5 @@
 # src/schemas/webinar.py
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -17,13 +17,13 @@ class WebinarCreate(WebinarBase):
     """Схема создания вебинара"""
     project_id: int
 
-    @validator('scheduled_at')
+    @field_validator('scheduled_at')
     def validate_scheduled_at(cls, v):
         if v <= datetime.utcnow():
             raise ValueError('Дата вебинара должна быть в будущем')
         return v
 
-    @validator('duration')
+    @field_validator('duration')
     def validate_duration(cls, v):
         if v <= 0:
             raise ValueError('Длительность должна быть больше 0')
@@ -84,4 +84,4 @@ class WebinarJoinResponse(BaseModel):
 
 from .project import ProjectResponse
 
-WebinarWithProjectResponse.update_forward_refs()
+WebinarWithProjectResponse.model_rebuild()

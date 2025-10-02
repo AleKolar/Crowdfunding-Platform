@@ -234,6 +234,17 @@ for route in app.routes:
 # Проверка
 # docker ps
 
+# Показать все контейнеры
+# docker ps -a
+
+# Остановить:
+# docker stop redis-server
+
+# Удалить:
+# docker rm redis-server
+
+# Запуск приложения
+# uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 # uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 
 # Удалите кэш если есть

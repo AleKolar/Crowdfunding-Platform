@@ -1,6 +1,6 @@
 # src/schemas/payment.py
-from pydantic import BaseModel, validator, field_validator
-from typing import Optional, Dict, Any
+from pydantic import BaseModel, field_validator
+from typing import Optional, Dict, Any, Literal
 from datetime import datetime
 
 
@@ -14,6 +14,7 @@ class DonationBase(BaseModel):
 class DonationCreate(DonationBase):
     """Схема создания доната"""
     project_id: int
+    currency: Literal["usd", "rub"] = "rub"
 
     @field_validator('amount')
     def validate_amount(cls, v):
@@ -125,4 +126,4 @@ class PaymentIntentResponse(BaseModel):
 
 from .user import UserResponse
 
-DonationWithDonorResponse.update_forward_refs()
+DonationWithDonorResponse.model_rebuild()

@@ -1,6 +1,5 @@
 # src/schemas/auth.py
-from pydantic import BaseModel, EmailStr, validator
-from typing import Optional
+from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime
 
 
@@ -12,13 +11,13 @@ class UserRegister(BaseModel):
     secret_code: str
     password: str
 
-    @validator('password')
+    @field_validator('password')
     def password_strength(cls, v):
         if len(v) < 8:
             raise ValueError('Пароль должен содержать минимум 8 символов')
         return v
 
-    @validator('phone')
+    @field_validator('phone')
     def phone_format(cls, v):
         # Базовая валидация телефона
         if not v.startswith('+'):
