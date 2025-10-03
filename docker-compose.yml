@@ -95,8 +95,19 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
-  # app сервис удаляем из docker-compose для разработки
-  # Запускаем приложение локально
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/crowdfunding_db
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-production-secret-key-change-this
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - .:/app  # Для разработки - монтируем код
 
 volumes:
   postgres_data:

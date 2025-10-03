@@ -1,7 +1,5 @@
 import logging
 
-
-
 # Логирование
 logger = logging.getLogger(__name__)
 

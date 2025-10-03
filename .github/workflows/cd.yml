@@ -1,0 +1,25 @@
+name: FastAPI CD
+
+on:
+  push:
+    branches: [ main ]
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'release'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build and test
+      run: |
+        docker build -t crowdfunding-platform:${{ github.sha }} .
+        docker run --rm crowdfunding-platform:${{ github.sha }} python -c "import src.main; print('✅ App ready for deployment')"
+
+    - name: Deploy to production
+      run: |
+        echo "🚀 Deployment would happen here"
+        # Добавьте ваши команды деплоя (AWS ECS, Heroku, etc.)

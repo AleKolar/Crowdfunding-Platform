@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Q
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
+from starlette import status
+
 from src.database.postgres import get_db
 from src.security.auth import get_current_user
 from src.schemas.project import (
@@ -134,15 +136,14 @@ async def get_project_posts(
     return await ProjectService.get_project_posts(db, project_id, skip, limit)
 
 
-@projects_router.post("/{project_id}/comments", response_model=CommentResponse)
-async def create_project_comment(
-    project_id: int,
-    comment_data: CommentCreate,
-    current_user=Depends(get_current_user),
+@projects_router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)  # ← добавили статус код
+async def create_project(
+    project_data: ProjectCreate,
+    current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Создание комментария к проекту"""
-    return await ProjectService.create_project_comment(db, project_id, comment_data, current_user.id)
+    """Создание нового проекта"""
+    return await ProjectService.create_project(db, project_data, current_user.id)
 
 
 @projects_router.get("/{project_id}/comments", response_model=List[CommentResponse])
