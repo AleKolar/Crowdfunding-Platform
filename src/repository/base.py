@@ -1,8 +1,9 @@
 # src/repository/base.py
-from typing import List, Optional, TypeVar, Generic
-from sqlalchemy import select, update, delete
+from typing import List, Optional, TypeVar, Generic, Dict, Any
+from sqlalchemy import select, update, delete, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
+from fastapi import HTTPException, status
 from src.database.models.base import Base
 
 ModelType = TypeVar("ModelType", bound=Base)
@@ -11,6 +12,8 @@ UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
 
 
 class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
+    """Базовый репозиторий с улучшенной обработкой ошибок и фильтрацией"""
+
     def __init__(self, model: type[ModelType]):
         self.model = model
 
@@ -18,6 +21,16 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         stmt = select(self.model).where(self.model.id == id)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_or_404(self, db: AsyncSession, id: int, detail: str = None) -> ModelType:
+        """Получение объекта или вызов 404 ошибки"""
+        obj = await self.get(db, id)
+        if not obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=detail or f"{self.model.__name__} with id {id} not found"
+            )
+        return obj
 
     async def get_multi(
             self,
@@ -28,10 +41,18 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     ) -> List[ModelType]:
         stmt = select(self.model)
 
-        # Применяем фильтры
+        # Улучшенная фильтрация
+        filter_conditions = []
         for field, value in filters.items():
             if value is not None:
-                stmt = stmt.where(getattr(self.model, field) == value)
+                if isinstance(value, (list, tuple)):
+                    # Для фильтрации по списку значений
+                    filter_conditions.append(getattr(self.model, field).in_(value))
+                else:
+                    filter_conditions.append(getattr(self.model, field) == value)
+
+        if filter_conditions:
+            stmt = stmt.where(and_(*filter_conditions))
 
         stmt = stmt.offset(skip).limit(limit)
         result = await db.execute(stmt)
@@ -43,13 +64,21 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             obj_in: CreateSchemaType,
             **extra_data
     ) -> ModelType:
-        create_data = obj_in.model_dump()
-        create_data.update(extra_data)
-        db_obj = self.model(**create_data)
-        db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
-        return db_obj
+        """Создание с обработкой транзакций"""
+        try:
+            create_data = obj_in.model_dump()
+            create_data.update(extra_data)
+            db_obj = self.model(**create_data)
+            db.add(db_obj)
+            await db.commit()
+            await db.refresh(db_obj)
+            return db_obj
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error creating {self.model.__name__}: {str(e)}"
+            )
 
     async def update(
             self,
@@ -57,18 +86,35 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             id: int,
             obj_in: UpdateSchemaType
     ) -> Optional[ModelType]:
-        stmt = (
-            update(self.model)
-            .where(self.model.id == id)
-            .values(**obj_in.model_dump(exclude_unset=True))
-            .returning(self.model)
-        )
-        result = await db.execute(stmt)
-        await db.commit()
-        return result.scalar_one_or_none()
+        """Обновление с обработкой транзакций"""
+        try:
+            update_data = obj_in.model_dump(exclude_unset=True)
+            stmt = (
+                update(self.model)
+                .where(self.model.id == id)
+                .values(**update_data)
+                .returning(self.model)
+            )
+            result = await db.execute(stmt)
+            await db.commit()
+            return result.scalar_one_or_none()
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error updating {self.model.__name__}: {str(e)}"
+            )
 
     async def delete(self, db: AsyncSession, id: int) -> bool:
-        stmt = delete(self.model).where(self.model.id == id)
-        result = await db.execute(stmt)
-        await db.commit()
-        return result.rowcount > 0
+        """Удаление с обработкой транзакций"""
+        try:
+            stmt = delete(self.model).where(self.model.id == id)
+            result = await db.execute(stmt)
+            await db.commit()
+            return result.rowcount > 0
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error deleting {self.model.__name__}: {str(e)}"
+            )

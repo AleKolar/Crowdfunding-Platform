@@ -331,4 +331,4 @@ ProjectWithCreatorResponse.model_rebuild()
 PostWithAuthorResponse.model_rebuild()
 PostWithMediaResponse.model_rebuild()
 CommentWithUserResponse.model_rebuild()
-ProjectNewsResponse.model_rebuild()  # ← ОБНОВЛЕНО
+ProjectNewsResponse.model_rebuild()

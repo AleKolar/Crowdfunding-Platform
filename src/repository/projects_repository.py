@@ -1,7 +1,9 @@
 # src/repository/projects_repository.py
 from typing import List, Optional
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from src.repository.base import BaseRepository
 from src.database.models.models_content import Project, ProjectStatus
 from src.schemas.project import ProjectCreate, ProjectUpdate
@@ -12,11 +14,11 @@ class ProjectsRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         super().__init__(Project)
 
     async def get_by_creator(
-            self,
-            db: AsyncSession,
-            creator_id: int,
-            skip: int = 0,
-            limit: int = 100
+        self,
+        db: AsyncSession,
+        creator_id: int,
+        skip: int = 0,
+        limit: int = 100
     ) -> List[Project]:
         stmt = (
             select(Project)
@@ -28,21 +30,19 @@ class ProjectsRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         result = await db.execute(stmt)
         return result.scalars().all()
 
-
     async def get_with_filters(
-            self,
-            db: AsyncSession,
-            skip: int = 0,
-            limit: int = 100,
-            category: Optional[str] = None,
-            status: Optional[ProjectStatus] = None,
-            is_featured: Optional[bool] = None,
-            min_goal: Optional[float] = None,
-            max_goal: Optional[float] = None
+        self,
+        db: AsyncSession,
+        skip: int = 0,
+        limit: int = 100,
+        category: Optional[str] = None,
+        status: Optional[ProjectStatus] = None,
+        is_featured: Optional[bool] = None,
+        min_goal: Optional[float] = None,
+        max_goal: Optional[float] = None
     ) -> List[Project]:
         stmt = select(Project)
 
-        # Применяем фильтры
         filters = []
         if category:
             filters.append(Project.category == category)
@@ -63,11 +63,11 @@ class ProjectsRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         return result.scalars().all()
 
     async def search(
-            self,
-            db: AsyncSession,
-            query: str,
-            skip: int = 0,
-            limit: int = 100
+        self,
+        db: AsyncSession,
+        query: str,
+        skip: int = 0,
+        limit: int = 100
     ) -> List[Project]:
         stmt = (
             select(Project)
@@ -84,16 +84,25 @@ class ProjectsRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         return result.scalars().all()
 
     async def increment_views(self, db: AsyncSession, project_id: int) -> None:
+        """Увеличение счетчика просмотров"""
+        stmt = (
+            update(Project)
+            .where(Project.id == project_id)
+            .values(views_count=Project.views_count + 1)
+        )
+        await db.execute(stmt)
+        await db.commit()
+
+    async def get_with_media(self, db: AsyncSession, project_id: int) -> Optional[Project]:
+        """Получение проекта с медиафайлами"""
         stmt = (
             select(Project)
+            .options(selectinload(Project.media))
             .where(Project.id == project_id)
         )
         result = await db.execute(stmt)
-        project = result.scalar_one_or_none()
+        return result.scalar_one_or_none()
 
-        if project:
-            project.views_count += 1
-            await db.commit()
 
 # Синглтон экземпляр
 projects_repository = ProjectsRepository()
