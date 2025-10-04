@@ -20,9 +20,9 @@ payments_router = APIRouter(
 
 @payments_router.post("/donate", response_model=PaymentIntentResponse)
 async def create_donation(
-    donation_data: PaymentIntentCreate,  # ← ИЗМЕНИЛИ схему
+    donation_data: PaymentIntentCreate,
     current_user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)  # ← ИЗМЕНИЛИ на AsyncSession
+    db: AsyncSession = Depends(get_db)
 ):
     """Создание доната"""
     try:
@@ -48,10 +48,10 @@ async def create_donation(
             detail=str(e)
         )
 
-@payments_router.post("/webhook", response_model=WebhookResponse)  # ← ДОБАВИЛИ response_model
+@payments_router.post("/webhook", response_model=WebhookResponse)
 async def stripe_webhook(
     request: Request,
-    db: AsyncSession = Depends(get_db)  # ← ДОБАВИЛИ сессию БД
+    db: AsyncSession = Depends(get_db)
 ):
     """Вебхук для обработки событий от Stripe"""
     payload = await request.body()

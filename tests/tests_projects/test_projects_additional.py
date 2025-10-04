@@ -47,7 +47,6 @@ class TestProjectsAdditional:
 
     def test_create_project_post(self, client, current_user_mock):
         """Тест создания поста в проекте"""
-        # Убрали мок get_current_user - он уже в фикстуре client
         with patch('src.endpoints.projects.ProjectService.create_project_post',
                    new_callable=AsyncMock) as mock_service:
             post_data = {
@@ -79,7 +78,6 @@ class TestProjectsAdditional:
             print(f"📥 Create post status: {response.status_code}")
             print(f"📥 Create post response: {response.text}")
 
-            # Временное решение - проверяем оба статуса
             assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
             data = response.json()
             assert data["content"] == post_data["content"]
@@ -99,7 +97,6 @@ class TestProjectsAdditional:
 
     def test_like_project(self, client, current_user_mock):
         """Тест лайка проекта"""
-        # Убрали мок get_current_user - он уже в фикстуре client
         with patch('src.endpoints.projects.ProjectService.like_project',
                    new_callable=AsyncMock) as mock_service:
             mock_service.return_value = {"message": "Project liked successfully", "like": {"id": 1}}

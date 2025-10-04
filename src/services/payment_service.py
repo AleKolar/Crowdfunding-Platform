@@ -213,7 +213,7 @@ class PaymentService:
         except ValueError as e:
             logger.error(f"Invalid payload: {e}")
             raise HTTPException(status_code=400, detail="Invalid payload")
-        except stripe.error.SignatureVerificationError as e:
+        except stripe._error.SignatureVerificationError as e:
             logger.error(f"Invalid signature: {e}")
             raise HTTPException(status_code=400, detail="Invalid signature")
 
@@ -241,7 +241,7 @@ class PaymentService:
                 'created': intent.created,
                 'metadata': intent.metadata
             }
-        except stripe.error.StripeError as e:
+        except stripe._error.StripeError as e:
             logger.error(f"Error retrieving payment intent: {e}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

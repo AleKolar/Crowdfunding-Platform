@@ -1,0 +1,42 @@
+Для разработки:
+
+# 1. Клонируйте репозиторий
+git clone <your-repo>
+cd <project-folder>
+
+# 2. Создайте .env файл
+cp .env.dev .env
+
+# 3. Запустите приложение
+make dev
+# или
+docker-compose up --build
+Для production:
+bash
+# 1. Создайте production .env файл
+cp .env.prod .env
+# Отредактируйте .env с реальными значениями
+
+# 2. Запустите production сборку
+make prod-up
+
+# 3. Проверьте логи
+docker-compose -f docker-compose.prod.yml logs -f
+
+ЗАПУСК БД (Redis) Краткая инструкция:
+Остановите всё:
+
+bash
+docker-compose down
+Запустите через docker-compose:
+
+bash
+docker-compose up -d
+Проверьте:
+
+bash
+docker-compose ps
+
+Запустите сервисы через docker-compose:
+bash
+docker-compose up postgres redis -d

@@ -3,7 +3,6 @@ import pytest
 from fastapi import status
 from unittest.mock import patch, AsyncMock
 
-
 class TestProjects:
     """Тесты для эндпоинтов проектов"""
 
@@ -88,7 +87,6 @@ class TestProjects:
 
     def test_create_project_success(self, client, project_data, current_user_mock):
         """Тест успешного создания проекта"""
-        # УБРАЛИ мок get_current_user - он уже в фикстуре client
         with patch('src.endpoints.projects.ProjectService.create_project', new_callable=AsyncMock) as mock_service:
             mock_service.return_value = {
                 "id": 1,
@@ -118,7 +116,6 @@ class TestProjects:
             print(f"📥 Create project status: {response.status_code}")
             print(f"📥 Create project response: {response.text}")
 
-            # Временное решение - проверяем оба статуса
             assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
             data = response.json()
             assert data["id"] == 1
@@ -207,7 +204,6 @@ class TestProjects:
 
     def test_update_project_success(self, client, current_user_mock):
         """Тест успешного обновления проекта"""
-        # УБРАЛИ мок get_current_user - он уже в фикстуре client
         with patch('src.endpoints.projects.ProjectService.update_project', new_callable=AsyncMock) as mock_service:
             update_data = {
                 "title": "Updated Project Title",
@@ -245,7 +241,6 @@ class TestProjects:
 
     def test_delete_project_success(self, client, current_user_mock):
         """Тест успешного удаления проекта"""
-        # УБРАЛИ мок get_current_user - он уже в фикстуре client
         with patch('src.endpoints.projects.ProjectService.delete_project', new_callable=AsyncMock) as mock_service:
             mock_service.return_value = {"message": "Project deleted successfully"}
 
@@ -257,21 +252,18 @@ class TestProjects:
 
     def test_create_project_unauthorized(self, project_data):
         """Тест создания проекта без авторизации"""
-        # Создаем отдельный клиент без переопределенной аутентификации
         from fastapi.testclient import TestClient
         from main import app
 
         with TestClient(app) as unauthorized_client:
             response = unauthorized_client.post("/projects/", json=project_data)
 
-            # Должен вернуть 401, так как нет авторизации
             assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_search_projects_empty_query(self, client):
         """Тест поиска с пустым запросом"""
         response = client.get("/projects/search/", params={"query": ""})
 
-        # Должен вернуть ошибку валидации
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 # pytest tests/tests_projects/test_projects.py --html=report.html

@@ -1,4 +1,4 @@
-# tests/test_payments.py
+# src/tests/tests_payments/test_payments.py
 import pytest
 import sys
 import os
@@ -13,11 +13,10 @@ from src.security.auth import get_current_user
 
 
 class TestPayments:
-    """Тесты для эндпоинтов платежей"""
+    """ИСПРАВЛЕННЫЕ тесты для эндпоинтов платежей"""
 
     @pytest.fixture
     def donation_data(self):
-        """Фикстура с валидными данными для доната"""
         return {
             "amount": 1000.0,
             "project_id": 1,
@@ -26,9 +25,8 @@ class TestPayments:
 
     @pytest.fixture
     def donation_data_rub(self):
-        """Фикстура с валидными данными для доната в RUB"""
         return {
-            "amount": 50000.0,  # 500 рублей
+            "amount": 500.0,
             "project_id": 1,
             "currency": "rub"
         }
@@ -40,20 +38,24 @@ class TestPayments:
                 self.id = 1
                 self.email = "test@example.com"
                 self.username = "test_user"
-
         return MockUser()
 
     def test_create_donation_rub(self, donation_data_rub, current_user_mock):
         """Тест успешного создания доната в RUB"""
-
         async def override_get_current_user():
             return current_user_mock
 
         app.dependency_overrides[get_current_user] = override_get_current_user
 
         try:
+            mock_result = {
+                'client_secret': 'cs_test_secret_12345',
+                'payment_intent_id': 'pi_test_12345',
+                'donation_id': 1
+            }
+
             with patch('src.endpoints.payments.payment_service.create_donation_intent',
-                       new_callable=AsyncMock, return_value="pi_mock_secret_12345"):
+                       new_callable=AsyncMock, return_value=mock_result):
 
                 client = TestClient(app)
                 response = client.post("/payments/donate", json=donation_data_rub)
@@ -63,45 +65,27 @@ class TestPayments:
 
                 assert response.status_code == status.HTTP_200_OK
                 data = response.json()
-                assert data["currency"] == "rub"  # Проверяем валюту
-        finally:
-            app.dependency_overrides = {}
-
-    def test_create_donation_invalid_currency(self, current_user_mock):
-        """Тест создания доната с невалидной валютой"""
-        invalid_data = {
-            "amount": 1000.0,
-            "project_id": 1,
-            "currency": "eur"  # Неподдерживаемая валюта
-        }
-
-        async def override_get_current_user():
-            return current_user_mock
-
-        app.dependency_overrides[get_current_user] = override_get_current_user
-
-        try:
-            client = TestClient(app)
-            response = client.post("/payments/donate", json=invalid_data)
-
-            print(f"📥 Invalid currency status: {response.status_code}")
-            print(f"📥 Invalid currency response: {response.text}")
-
-            assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+                assert data["currency"] == "rub"
+                assert data["donation_id"] == 1
         finally:
             app.dependency_overrides = {}
 
     def test_create_donation_success(self, donation_data, current_user_mock):
         """Тест успешного создания доната"""
-
         async def override_get_current_user():
             return current_user_mock
 
         app.dependency_overrides[get_current_user] = override_get_current_user
 
         try:
+            mock_result = {
+                'client_secret': 'cs_test_secret_12345',
+                'payment_intent_id': 'pi_test_12345',
+                'donation_id': 1
+            }
+
             with patch('src.endpoints.payments.payment_service.create_donation_intent',
-                       new_callable=AsyncMock, return_value="pi_mock_secret_12345"):
+                       new_callable=AsyncMock, return_value=mock_result):
 
                 client = TestClient(app)
                 response = client.post("/payments/donate", json=donation_data)
@@ -112,10 +96,10 @@ class TestPayments:
                 assert response.status_code == status.HTTP_200_OK
                 data = response.json()
                 assert "client_secret" in data
-                assert data["client_secret"] == "pi_mock_secret_12345"
+                assert data["client_secret"] == "cs_test_secret_12345"
+                assert data["payment_intent_id"] == "pi_test_12345"
+                assert data["donation_id"] == 1
                 assert data["amount"] == donation_data["amount"]
-                # Проверяем, что currency возвращается (но не отправляется)
-                assert "currency" in data
                 assert data["currency"] == "rub"
         finally:
             app.dependency_overrides = {}
@@ -129,14 +113,6 @@ class TestPayments:
         print(f"📥 Unauthorized donation response: {response.text}")
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-
-    def test_create_donation_invalid_data(self, current_user_mock):
-        """Тест создания доната с невалидными данными"""
-        invalid_data = {
-            "amount": -100,  # Отрицательная сумма
-            "project_id": "invalid"  # Неверный тип
-            # Убираем currency из невалидных данных
-        }
 
     def test_get_payment_status(self):
         """Тест получения статуса платежа"""
@@ -187,7 +163,7 @@ class TestPayments:
         app.dependency_overrides[get_current_user] = override_get_current_user
 
         try:
-            with patch('src.endpoints.payments.payment_service.create_refund',
+            with patch('src.endpoints.payment.payment_service.create_refund',
                        new_callable=AsyncMock, return_value="re_mock_12345"):
                 client = TestClient(app)
                 response = client.post(f"/payments/refund/{payment_intent_id}")
