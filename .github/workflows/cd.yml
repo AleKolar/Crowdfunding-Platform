@@ -9,25 +9,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - uses: actions/checkout@v4
+
     - name: Check secrets exist
       run: |
         echo "Checking if Docker secrets are available..."
         if [ -n "$DOCKER_USERNAME" ]; then
-          echo "✅ DOCKER_USERNAME is SET"
+          echo "✅ DOCKER_USERNAME is SET (length: ${#DOCKER_USERNAME})"
         else
           echo "❌ DOCKER_USERNAME is EMPTY"
-        fi
-        
-        if [ -n "$DOCKER_PASSWORD" ]; then
-          echo "✅ DOCKER_PASSWORD is SET"
-        else
-          echo "❌ DOCKER_PASSWORD is EMPTY"
         fi
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Simple Docker build test
+    - name: Build Docker image
       run: |
+        ls -la  # Покажет файлы в рабочей директории
         docker build -t local-test .
         echo "✅ Local build successful"
