@@ -5,6 +5,9 @@ python-multipart==0.0.20
 httpx==0.28.1
 slowapi==0.1.9
 
+# Платежи
+stripe==13.0.0
+
 # База данных
 sqlalchemy==2.0.23
 asyncpg==0.29.0
