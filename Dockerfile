@@ -29,7 +29,7 @@ USER app
 
 COPY --chown=app:app . .
 
-ENV PATH=/root/.local/bin:$PATH
+ENV ENV PATH=/home/app/.local/bin:$PATH
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
@@ -38,5 +38,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# ПРАВИЛЬНАЯ КОМАНДА - main.py в корне
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
