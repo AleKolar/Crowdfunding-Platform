@@ -1,25 +1,37 @@
-name: FastAPI CD
+name: CD
 
 on:
   push:
     branches: [ main ]
-  release:
-    types: [published]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'release'
+    environment: production
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - name: Build and test
-      run: |
-        docker build -t crowdfunding-platform:${{ github.sha }} .
-        docker run --rm crowdfunding-platform:${{ github.sha }} python -c "import src.main; print('✅ App ready for deployment')"
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
 
-    - name: Deploy to production
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/crowdfunding-app:latest
+          ${{ secrets.DOCKER_USERNAME }}/crowdfunding-app:${{ github.sha }}
+
+    - name: Verify deployment
       run: |
-        echo "🚀 Deployment would happen here"
-        # Добавьте ваши команды деплоя (AWS ECS, Heroku, etc.)
+        echo "✅ Docker image pushed to Docker Hub!"
+        echo "📦 Image: ${{ secrets.DOCKER_USERNAME }}/crowdfunding-app:latest"
