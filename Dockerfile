@@ -1,5 +1,5 @@
 # Dockerfile
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -7,7 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
-    postgresql-dev \
+    libpq-dev \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,6 +23,7 @@ WORKDIR /app
 # Установка только runtime зависимостей
 RUN apt-get update && apt-get install -y \
     libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Копирование Python пакетов из builder stage
@@ -48,4 +49,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Запуск приложения (SECRET_KEY генерируется только если не предоставлен)
-CMD ["sh", "-c", "export SECRET_KEY=${SECRET_KEY:-$(python -c 'import secrets; print(secrets.token_urlsafe(32))')} && uvicorn main:app --host 0.0.0.0 --port 8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
