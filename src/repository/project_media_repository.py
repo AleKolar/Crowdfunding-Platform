@@ -1,6 +1,4 @@
-# src/repository/project_media_repository.py
 from typing import List, Optional
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.repository.base import BaseRepository
 from src.database.models.models_content import ProjectMedia
@@ -19,16 +17,20 @@ class ProjectMediaRepository(BaseRepository[ProjectMedia, ProjectMediaCreate, Pr
             skip: int = 0,
             limit: int = 100
     ) -> List[ProjectMedia]:
-        stmt = select(ProjectMedia).where(ProjectMedia.project_id == project_id)
-
+        # !!! Используем универсальный метод вместо дублирования get_by_field из base!!!
+        additional_filters = {}
         if media_type:
-            stmt = stmt.where(ProjectMedia.file_type == media_type)
+            additional_filters['file_type'] = media_type
 
-        stmt = stmt.order_by(ProjectMedia.sort_order, ProjectMedia.created_at)
-        stmt = stmt.offset(skip).limit(limit)
-
-        result = await db.execute(stmt)
-        return result.scalars().all()
+        return await self.get_by_field(
+            db,
+            field_name='project_id',
+            field_value=project_id,
+            order_by=(ProjectMedia.sort_order, ProjectMedia.created_at),
+            skip=skip,
+            limit=limit,
+            **additional_filters
+        )
 
 
 project_media_repository = ProjectMediaRepository()

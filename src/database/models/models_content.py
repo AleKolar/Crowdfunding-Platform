@@ -1,4 +1,4 @@
-# src/database/models/content_models.py
+# src/database/models/models_content.py
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, JSON, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -66,6 +66,10 @@ class Project(Base):
     shares_count = Column(Integer, default=0)
     backers_count = Column(Integer, default=0)  # Количество поддержавших
 
+    # НОВЫЕ ПОЛЯ ДЛЯ СТАТИСТИКИ ДОНАТОВ
+    total_donations = Column(Float, default=0.0)  # Общая сумма донатов
+    last_donation_at = Column(DateTime, nullable=True)  # Дата последнего доната
+
     # Связи
     creator = relationship("User", back_populates="projects")
     posts = relationship("Post", back_populates="project", cascade="all, delete-orphan")
@@ -79,7 +83,7 @@ class Project(Base):
     def progress_percentage(self):
         if self.goal_amount == 0:
             return 0
-        return min(100, round(self.current_amount / self.goal_amount) * 100)
+        return min(100, round((self.current_amount / self.goal_amount) * 100, 2))
 
     @property
     def days_remaining(self):
@@ -209,7 +213,6 @@ class Comment(Base):
     post = relationship("Post", back_populates="comments")
     user = relationship("User")
     parent = relationship("Comment", remote_side=[id], backref="replies")
-
 
 
 class Like(Base):

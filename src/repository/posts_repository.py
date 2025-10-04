@@ -1,10 +1,10 @@
 # src/repository/posts_repository.py
 from typing import List
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.repository.base import BaseRepository
 from src.database.models.models_content import Post
 from src.schemas.project import PostCreate, PostUpdate
+
 
 class PostsRepository(BaseRepository[Post, PostCreate, PostUpdate]):
     def __init__(self):
@@ -17,14 +17,14 @@ class PostsRepository(BaseRepository[Post, PostCreate, PostUpdate]):
         skip: int = 0,
         limit: int = 50
     ) -> List[Post]:
-        stmt = (
-            select(Post)
-            .where(Post.project_id == project_id)
-            .order_by(Post.created_at.desc())
-            .offset(skip)
-            .limit(limit)
+        # !!! Упрощенная версия через get_by_field из base.py !!!
+        return await self.get_by_field(
+            db,
+            field_name='project_id',
+            field_value=project_id,
+            order_by=Post.created_at.desc(),
+            skip=skip,
+            limit=limit
         )
-        result = await db.execute(stmt)
-        return result.scalars().all()
 
 posts_repository = PostsRepository()

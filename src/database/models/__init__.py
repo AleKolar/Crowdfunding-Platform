@@ -6,14 +6,14 @@ __all__ = [
     'Base',
     'User', 'SMSVerificationCode',
     'UserProfile', 'UserSettings', 'Subscription',
-    'Project', 'Post', 'Like', 'Repost',
+    'Project', 'ProjectMedia', 'ProjectUpdate', 'UpdateMedia', 'Post', 'PostMedia', 'Comment', 'Like', 'Repost',
     'Webinar', 'WebinarRegistration',
     'Donation', 'Transaction', 'Wallet', 'PayoutRequest',
     'Notification', 'NotificationTemplate', 'UserNotificationSettings', 'EmailQueue'
 ]
 
 from .models_auth import User, SMSVerificationCode
-from .models_content import Project, Post, Like, Repost
+from .models_content import Project, Post, Like, Repost, ProjectMedia, ProjectUpdate, UpdateMedia, PostMedia, Comment
 from .models_notification import Notification, NotificationTemplate, UserNotificationSettings, EmailQueue
 from .models_payment import Donation, Transaction, Wallet, PayoutRequest
 from .models_user import UserProfile, UserSettings, Subscription
