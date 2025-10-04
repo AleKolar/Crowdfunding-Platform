@@ -46,7 +46,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc g++ postgresql-dev python3-dev
+        sudo apt-get install -y gcc g++ libpq-dev python3-dev  # ← ИСПРАВЛЕНО!
 
     - name: Install Python dependencies
       run: |
@@ -75,10 +75,14 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Clear Docker cache
+      run: |
+        docker system prune -a -f
+
     - name: Build Docker image
       run: |
         docker build -t crowdfunding-platform:test .
 
     - name: Test Docker image
       run: |
-        docker run --rm crowdfunding-platform:test python -c "import src.main; print('App imports successfully')"
+        docker run --rm crowdfunding-platform:test python -c "import main; print('App imports successfully')"
