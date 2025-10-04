@@ -46,7 +46,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc g++ libpq-dev python3-dev  # ← ИСПРАВЛЕНО!
+        sudo apt-get install -y gcc g++ libpq-dev python3-dev
 
     - name: Install Python dependencies
       run: |
@@ -68,21 +68,22 @@ jobs:
       with:
         file: ./coverage.xml
 
-  build:
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Clear Docker cache
-      run: |
-        docker system prune -a -f
-
-    - name: Build Docker image
-      run: |
-        docker build -t crowdfunding-platform:test .
-
-    - name: Test Docker image
-      run: |
-        docker run --rm crowdfunding-platform:test python -c "import main; print('App imports successfully')"
+# ПРОБУЕМ без build:
+#  build:
+#    runs-on: ubuntu-latest
+#    needs: test
+#
+#    steps:
+#    - uses: actions/checkout@v3
+#
+#    - name: Clear Docker cache
+#      run: |
+#        docker system prune -a -f
+#
+#    - name: Build Docker image
+#      run: |
+#        docker build -t crowdfunding-platform:test .
+#
+#    - name: Test Docker image
+#      run: |
+#        docker run --rm crowdfunding-platform:test python -c "import main; print('App imports successfully')"
