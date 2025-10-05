@@ -66,7 +66,6 @@ jobs:
         coveralls
 
     - name: Upload to Coveralls
-      uses: coverallsapp/github-action@v3.1.1
+      uses: coverallsapp/github-action@v2
       with:
-        # github-token is automatically provided by GitHub Actions
         github-token: ${{ secrets.GITHUB_TOKEN }}
