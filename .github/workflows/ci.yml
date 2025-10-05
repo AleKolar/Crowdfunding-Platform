@@ -60,6 +60,7 @@ jobs:
         REDIS_URL: redis://localhost:6379
         SECRET_KEY: i5GSOGVbEN7l-UJRAoS2Uxjw0s8YU3oKdWMeQGCaw1M
         ACCESS_TOKEN_EXPIRE_MINUTES: 30
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         coverage run --source=src -m pytest tests/ -v
         coverage xml
