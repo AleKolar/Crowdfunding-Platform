@@ -64,15 +64,13 @@ jobs:
       run: |
         coverage run --source=src -m pytest tests/ -v
         coverage xml
-        coveralls
-
+        
         echo "=========================================="
         echo "📊 CODE COVERAGE REPORT"
         echo "=========================================="
         coverage report --show-missing
         echo "=========================================="
           
-        # Получаем процент для бейджа
         TOTAL_COVERAGE=$(coverage report --format=total)
         echo "🎯 TOTAL COVERAGE: ${TOTAL_COVERAGE}%"
   
