@@ -2,9 +2,27 @@
 
 ![CI](https://github.com/AleKolar/Crowdfunding-Platform/actions/workflows/ci.yml/badge.svg)
 ![CD](https://github.com/AleKolar/Crowdfunding-Platform/actions/workflows/cd.yml/badge.svg)
-![Coverage](https://img.shields.io/badge/Coverage-Testing-blue)
+![Coverage](https://coveralls.io/repos/github/AleKolar/Crowdfunding-Platform/badge.svg?branch=main)
 
 A modern crowdfunding platform built with FastAPI, PostgreSQL, and Redis.
+
+## 🧪 Testing & Quality
+
+| Metric | Status |
+|--------|--------|
+| **Total Tests** | 38 |
+| **Tests Passed** | 37 ✅ |
+| **Tests Skipped** | 1 ⏭️ |
+| **Test Coverage** | [View on Coveralls](https://coveralls.io/github/AleKolar/Crowdfunding-Platform) |
+| **Code Quality** | Enforced via CI/CD |
+
+### Test Categories
+- ✅ **Authentication** - User registration, login, 2FA
+- ✅ **Payments** - Donations, webhooks, refunds  
+- ✅ **Projects** - CRUD operations, search, media
+- ✅ **Database** - Integration tests
+
+**Live Coverage**: [Coveralls Dashboard](https://coveralls.io/github/AleKolar/Crowdfunding-Platform)
 
 ## 🚀 Features
 
