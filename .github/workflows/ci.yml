@@ -71,8 +71,14 @@ jobs:
         coverage report --show-missing
         echo "=========================================="
           
-        TOTAL_COVERAGE=$(coverage report --format=total)
-        echo "🎯 TOTAL COVERAGE: ${TOTAL_COVERAGE}%"
+        COVERAGE_PERCENT=$(python -c "
+        import xml.etree.ElementTree as ET
+        tree = ET.parse('coverage.xml')
+        root = tree.getroot()
+        coverage = float(root.get('line-rate')) * 100
+        print(f'{coverage:.1f}%')
+        ")
+        echo "🎯 COVERAGE: $COVERAGE_PERCENT"
   
         coveralls
 
