@@ -49,5 +49,8 @@ typing_extensions>=4.5
 # Валидация
 email-validator>=2.0.0
 
+# Вебсокет
+websockets==15.0.1
+
 # Тесты
 coveralls==3.3.1
