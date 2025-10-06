@@ -30,6 +30,7 @@ class Settings:
     CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", f"redis://{REDIS_HOST}:{REDIS_PORT}/1")
 
     # LiveKit (для вебинаров)
+    LIVEKIT_HOST = os.getenv("LIVEKIT_HOST", "localhost")
     LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
     LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
 
@@ -37,6 +38,12 @@ class Settings:
     STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
     STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
     STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+
+    # Websocket (для оповещений)
+    WEBSOCKET_PORT = os.getenv("WEBSOCKET_PORT", "8001")
+
+
+
 
     @property
     def DATABASE_URL(self) -> str:

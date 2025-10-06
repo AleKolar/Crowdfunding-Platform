@@ -15,6 +15,7 @@ from src.database.redis_client import redis_manager
 from src.endpoints.auth import auth_router
 from src.endpoints.payments import payments_router
 from src.endpoints.projects import projects_router
+from src.endpoints.websocket import projects_web_router
 
 # Инициализация лимитера для rate limiting
 limiter = Limiter(key_func=get_remote_address)
@@ -216,6 +217,8 @@ app.include_router(auth_router)
 app.include_router(payments_router)
 
 app.include_router(projects_router)
+
+app.include_router(projects_web_router)
 
 print("🔍 Зарегистрированные пути:")
 for route in app.routes:

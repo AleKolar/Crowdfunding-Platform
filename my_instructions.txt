@@ -1,5 +1,5 @@
-git add README.md
-git commit -m "docs: update testing metrics in README"
+git add .
+git commit -m "added webinar_service_and_try:websocket"
 git push origin main
 
 git add .
