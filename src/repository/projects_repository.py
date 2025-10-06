@@ -1,7 +1,6 @@
 # src/repository/projects_repository.py
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from src.repository.base import BaseRepository
 from src.database.models.models_content import Project, ProjectStatus
