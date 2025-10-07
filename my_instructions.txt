@@ -1,5 +1,5 @@
 git add .
-git commit -m "auth test has been fixed"
+git commit -m "added tests for transactions,wallets,likes,posts,comments"
 git push origin main
 
 git add .

@@ -78,7 +78,6 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return True
         return False
 
-    # НОВЫЕ УНИВЕРСАЛЬНЫЕ МЕТОДЫ ДЛЯ ИСКЛЮЧЕНИЯ ДУБЛИРОВАНИЯ
     async def get_by_field(
             self,
             db: AsyncSession,
@@ -97,7 +96,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if filter_value is not None:
                 stmt = stmt.where(getattr(self.model, filter_field) == filter_value)
 
-        if order_by:
+        if order_by is not None:
             stmt = stmt.order_by(order_by)
 
         stmt = stmt.offset(skip).limit(limit)

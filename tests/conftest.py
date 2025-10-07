@@ -25,6 +25,26 @@ try:
     from src.endpoints.auth import auth_router
     from src.endpoints.payments import payments_router
     from src.endpoints.projects import projects_router
+
+    # ✅ ДОБАВЛЯЕМ ИМПОРТЫ НОВЫХ РОУТЕРОВ (если они существуют)
+    try:
+        from src.endpoints.comments import comments_router
+
+        COMMENTS_AVAILABLE = True
+        print("✅ Comments router импортирован")
+    except ImportError:
+        COMMENTS_AVAILABLE = False
+        print("⚠️ Comments router не найден")
+
+    try:
+        from src.endpoints.likes import likes_router
+
+        LIKES_AVAILABLE = True
+        print("✅ Likes router импортирован")
+    except ImportError:
+        LIKES_AVAILABLE = False
+        print("⚠️ Likes router не найден")
+
     from src.security.auth import get_current_user
 
     print("✅ Все модули успешно импортированы")
@@ -37,13 +57,11 @@ except ImportError as e:
 # Моки для функций хеширования паролей
 def mock_get_password_hash(password):
     """Мок для хеширования пароля - обходит bcrypt ограничения"""
-    print(f"✅ MOCK get_password_hash called with: '{password}' (length: {len(password)})")
     return f"mock_hash_{password}"
 
 
 def mock_verify_password(plain_password, hashed_password):
     """Мок проверки пароля"""
-    print(f"✅ MOCK verify_password called with: '{plain_password}' vs '{hashed_password}'")
     if hashed_password.startswith("mock_hash_"):
         expected_password = hashed_password.replace("mock_hash_", "")
         return plain_password == expected_password
@@ -53,12 +71,12 @@ def mock_verify_password(plain_password, hashed_password):
 # Применяем моки к модулю аутентификации
 try:
     import src.security.auth as auth_module
+
     auth_module.get_password_hash = mock_get_password_hash
     auth_module.verify_password = mock_verify_password
     print("✅ Моки применены к auth модулю")
 except Exception as e:
     print(f"⚠️ Не удалось применить моки к auth модулю: {e}")
-
 
 # Асинхронная тестовая БД (SQLite)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -67,7 +85,7 @@ engine = create_async_engine(
     TEST_DATABASE_URL,
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
-    echo=True  # Для отладки SQL запросов
+    echo=False  # Убрали echo для чистоты вывода
 )
 
 TestingAsyncSessionLocal = async_sessionmaker(
@@ -91,6 +109,15 @@ def create_test_app():
     test_app.include_router(payments_router)
     test_app.include_router(projects_router)
 
+    # ✅ ДОБАВЛЯЕМ НОВЫЕ РОУТЕРЫ (если они доступны)
+    if COMMENTS_AVAILABLE:
+        test_app.include_router(comments_router)
+        print("✅ Comments router добавлен в тестовое приложение")
+
+    if LIKES_AVAILABLE:
+        test_app.include_router(likes_router)
+        print("✅ Likes router добавлен в тестовое приложение")
+
     # Health check
     @test_app.get("/health")
     async def health_check():
@@ -102,12 +129,15 @@ def create_test_app():
 @pytest.fixture
 def current_user_mock():
     """Фикстура мока текущего пользователя"""
+
     class MockUser:
         def __init__(self):
             self.id = 1
             self.email = "test@example.com"
             self.username = "testuser"
             self.is_active = True
+            self.phone = "+79991234567"
+
     return MockUser()
 
 
@@ -133,7 +163,25 @@ def event_loop():
 
 
 @pytest.fixture(scope="function")
-async def client(current_user_mock) -> TestClient:
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Фикстура для доступа к асинхронной тестовой сессии БД"""
+    # Создаем таблицы перед каждым тестом
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async with TestingAsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+    # Очищаем таблицы после теста
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest.fixture(scope="function")
+async def client() -> TestClient:
     """Test client с асинхронной тестовой БД"""
     # Создаем таблицы
     async with engine.begin() as conn:
@@ -147,7 +195,15 @@ async def client(current_user_mock) -> TestClient:
                 await session.close()
 
     async def override_get_current_user():
-        return current_user_mock
+        # Возвращаем нового мока для каждого теста
+        mock_user = type('MockUser', (), {
+            'id': 1,
+            'email': 'test@example.com',
+            'username': 'testuser',
+            'is_active': True,
+            'phone': '+79991234567'
+        })()
+        return mock_user
 
     # Создаем тестовое приложение
     test_app = create_test_app()
@@ -159,23 +215,97 @@ async def client(current_user_mock) -> TestClient:
     with TestClient(test_app) as test_client:
         yield test_client
 
-    # Очищаем переопределения и таблицы
+    # Очищаем переопределения
     test_app.dependency_overrides.clear()
+
+    # Очищаем таблицы
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
 
-@pytest.fixture(scope="function")
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Фикстура для доступа к асинхронной тестовой сессии БД"""
-    async with TestingAsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+# ✅ ДОБАВЛЕНЫ ФИКСТУРЫ ДЛЯ ТЕСТОВ
+
+@pytest.fixture
+async def test_user(db_session: AsyncSession):
+    """Создает тестового пользователя для репозиториев"""
+    from src.database.models import User
+
+    user = User(
+        email="repo_test@example.com",
+        phone="+79998887766",
+        username="repotestuser",
+        secret_code="5678",
+        hashed_password="mock_hash_TestPass123!",
+        is_active=True
+    )
+
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    return user
+
+
+@pytest.fixture
+async def test_project(db_session: AsyncSession, test_user):
+    """Создает тестовый проект для репозиториев"""
+    from src.database.models.models_content import Project, ProjectStatus
+
+    project = Project(
+        title="Test Project",
+        description="Test Description",
+        short_description="Short test description",
+        goal_amount=1000.0,
+        current_amount=0.0,
+        category="Technology",
+        tags=["test", "technology"],
+        status=ProjectStatus.DRAFT,
+        creator_id=test_user.id,
+
+    )
+
+    db_session.add(project)
+    await db_session.commit()
+    await db_session.refresh(project)
+
+    return project
+
+
+@pytest.fixture
+async def test_post(db_session: AsyncSession, test_user, test_project):
+    """Создает тестовый пост для репозиториев"""
+    from src.database.models.models_content import Post, PostType
+
+    post = Post(
+        content="Test Content",
+        author_id=test_user.id,
+        project_id=test_project.id,
+        post_type=PostType.UPDATE,
+
+    )
+
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    return post
+
+
+@pytest.fixture
+def authenticated_headers():
+    """✅ ФИКСТУРА ДЛЯ АУТЕНТИФИЦИРОВАННЫХ ЗАПРОСОВ"""
+    return {
+        "Content-Type": "application/json",
+        #!!! Пока используем мок аутентификации, позже можно добавить реальный токен
+    }
 
 
 # Глобальная настройка pytest для асинхронных тестов
 def pytest_configure(config):
     """Конфигурация pytest для асинхронных тестов"""
     config.option.asyncio_mode = "auto"
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Очистка после завершения всех тестов"""
+    print("🧹 Очистка после тестов завершена")
