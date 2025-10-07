@@ -36,7 +36,7 @@ jobs:
           - 6379:6379
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4  # ✅ Обновлено до v4
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -62,8 +62,8 @@ jobs:
         ACCESS_TOKEN_EXPIRE_MINUTES: 30
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Запускаем тесты с детальной статистикой
-        pytest tests/ -v --html=report.html --self-contained-html --cov=src --cov-report=xml --cov-report=term-missing > test_output.txt || true
+        # Запускаем тесты
+        pytest tests/ -v --html=report.html --self-contained-html --cov=src --cov-report=xml --cov-report=term-missing
         
         echo "=========================================="
         echo "📊 CODE COVERAGE REPORT"
@@ -79,68 +79,56 @@ jobs:
         print(f'{coverage:.1f}%')
         ")
         echo "🎯 COVERAGE: $COVERAGE_PERCENT"
-        
-        # Парсим результаты тестов
-        TESTS_PASSED=$(grep -oP '\d+(?= passed)' test_output.txt | tail -1 || echo "0")
-        TESTS_FAILED=$(grep -oP '\d+(?= failed)' test_output.txt | tail -1 || echo "0") 
-        TESTS_SKIPPED=$(grep -oP '\d+(?= skipped)' test_output.txt | tail -1 || echo "0")
-        TESTS_ERRORS=$(grep -oP '\d+(?= error)' test_output.txt | tail -1 || echo "0")
-        
-        echo "📈 TEST RESULTS:"
-        echo "✅ Passed: $TESTS_PASSED"
-        echo "❌ Failed: $TESTS_FAILED"
-        echo "⏭️ Skipped: $TESTS_SKIPPED"
-        echo "💥 Errors: $TESTS_ERRORS"
 
     - name: Upload to Coveralls
       uses: coverallsapp/github-action@v2
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Update README with test stats
-      if: github.ref == 'refs/heads/main'
-      run: |
-        # Создаем скрипт для обновления README
-        python -c "
-        import re
-        
-        # Читаем текущий README
-        with open('README.md', 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Обновляем статистику тестов
-        new_content = re.sub(
-            r'\*\*Total Tests\*\* \| \d+ \|',
-            f'**Total Tests** | $((TESTS_PASSED + TESTS_FAILED + TESTS_SKIPPED + TESTS_ERRORS)) |',
-            content
-        )
-        
-        new_content = re.sub(
-            r'\*\*Tests Passed\*\* \| .* \|',
-            f'**Tests Passed** | {TESTS_PASSED} ✅ |',
-            new_content
-        )
-        
-        new_content = re.sub(
-            r'\*\*Tests Skipped\*\* \| .* \|',
-            f'**Tests Skipped** | {TESTS_SKIPPED} ⏭️ |',
-            new_content
-        )
-        
-        # Записываем обновленный README
-        with open('README.md', 'w', encoding='utf-8') as f:
-            f.write(new_content)
-        "
-        
-        # Коммитим изменения
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add README.md
-        git commit -m "📊 Update test statistics: $TESTS_PASSED passed, $TESTS_FAILED failed, $TESTS_SKIPPED skipped [skip ci]" || exit 0
-        git push
-
     - name: Upload test report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: pytest-report
         path: report.html
+        retention-days: 30
+
+    - name: Update README with test stats
+      if: github.ref == 'refs/heads/main'
+      run: |
+        # Получаем статистику тестов
+        TESTS_PASSED=$(python -c "
+        import re, subprocess
+        result = subprocess.run(['pytest', 'tests/', '-v'], capture_output=True, text=True)
+        output = result.stdout
+        passed = re.search(r'(\d+) passed', output)
+        failed = re.search(r'(\d+) failed', output)
+        skipped = re.search(r'(\d+) skipped', output)
+        print(f'{passed.group(1) if passed else 0},{failed.group(1) if failed else 0},{skipped.group(1) if skipped else 0}')
+        ")
+        
+        IFS=',' read -r TESTS_PASSED TESTS_FAILED TESTS_SKIPPED <<< \"$TESTS_PASSED\"
+        
+        echo \"📊 Test Results: $TESTS_PASSED passed, $TESTS_FAILED failed, $TESTS_SKIPPED skipped\"
+        
+        # Обновляем README
+        python -c "
+        import re
+        with open('README.md', 'r') as f:
+            content = f.read()
+        
+        total = $TESTS_PASSED + $TESTS_FAILED + $TESTS_SKIPPED
+        
+        content = re.sub(r'\\*\\*Total Tests\\*\\* \\| .* \\|', f'**Total Tests** | {total} |', content)
+        content = re.sub(r'\\*\\*Tests Passed\\*\\* \\| .* \\|', f'**Tests Passed** | {$TESTS_PASSED} ✅ |', content)
+        content = re.sub(r'\\*\\*Tests Skipped\\*\\* \\| .* \\|', f'**Tests Skipped** | {$TESTS_SKIPPED} ⏭️ |', content)
+        
+        with open('README.md', 'w') as f:
+            f.write(content)
+        "
+        
+        # Коммитим изменения
+        git config --local user.email \"action@github.com\"
+        git config --local user.name \"GitHub Action\"
+        git add README.md
+        git commit -m \"📊 Update test statistics: $TESTS_PASSED passed, $TESTS_FAILED failed, $TESTS_SKIPPED skipped [skip ci]\" || exit 0
+        git push
