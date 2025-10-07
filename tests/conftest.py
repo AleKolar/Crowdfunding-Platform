@@ -1,13 +1,14 @@
-# tests/conftest.py
+# src/tests/conftest.py
 import os
 import sys
-
+import asyncio
 import pytest
 import uuid
+from typing import AsyncGenerator
+
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # Добавляем корневую директорию проекта в путь
@@ -33,11 +34,10 @@ except ImportError as e:
     raise
 
 
-# Определяем моки для функций хеширования паролей
+# Моки для функций хеширования паролей
 def mock_get_password_hash(password):
     """Мок для хеширования пароля - обходит bcrypt ограничения"""
     print(f"✅ MOCK get_password_hash called with: '{password}' (length: {len(password)})")
-    # Простой мок без bcrypt - возвращаем пароль с префиксом
     return f"mock_hash_{password}"
 
 
@@ -50,21 +50,31 @@ def mock_verify_password(plain_password, hashed_password):
     return False
 
 
-# Применяем моки к модулю аутентификации ДО создания приложения
+# Применяем моки к модулю аутентификации
 try:
     import src.security.auth as auth_module
-
-    # Сохраняем оригинальные функции на случай если понадобятся
-    auth_module.original_get_password_hash = auth_module.get_password_hash
-    auth_module.original_verify_password = auth_module.verify_password
-
-    # Применяем моки
     auth_module.get_password_hash = mock_get_password_hash
     auth_module.verify_password = mock_verify_password
-
     print("✅ Моки применены к auth модулю")
 except Exception as e:
     print(f"⚠️ Не удалось применить моки к auth модулю: {e}")
+
+
+# Асинхронная тестовая БД (SQLite)
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+engine = create_async_engine(
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+    echo=True  # Для отладки SQL запросов
+)
+
+TestingAsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
 
 
 # Создаем тестовое приложение
@@ -89,27 +99,17 @@ def create_test_app():
     return test_app
 
 
-# Тестовая БД
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 @pytest.fixture
 def current_user_mock():
     """Фикстура мока текущего пользователя"""
-
     class MockUser:
         def __init__(self):
             self.id = 1
             self.email = "test@example.com"
             self.username = "testuser"
             self.is_active = True
-
     return MockUser()
+
 
 @pytest.fixture
 def valid_register_data():
@@ -119,83 +119,34 @@ def valid_register_data():
         "email": f"test_{unique_id}@example.com",
         "phone": f"+7999{unique_id[:7]}",
         "username": f"user_{unique_id}",
-        "is_active": True,
         "password": "TestPass123!",
         "secret_code": "1234"
     }
 
 
-@pytest.fixture
-def mock_project_response():
-    """Фикстура с моком ответа проекта"""
-    return {
-        "id": 1,
-        "title": "Test Project",
-        "description": "Test project description",
-        "short_description": "Test short description",
-        "goal_amount": 5000.0,
-        "category": "technology",
-        "tags": ["tech", "innovation"],
-        "creator_id": 1,
-        "current_amount": 0.0,
-        "status": "draft",
-        "is_featured": False,
-        "created_at": "2023-01-01T00:00:00",
-        "updated_at": "2023-01-01T00:00:00",
-        "views_count": 0,
-        "likes_count": 0,
-        "shares_count": 0,
-        "backers_count": 0,
-        "progress_percentage": 0.0,
-        "days_remaining": None,
-        "is_funded": False
-    }
-
-
-@pytest.fixture
-def mock_project_with_media_response():
-    """Фикстура с моком ответа проекта с медиа"""
-    return {
-        "id": 1,
-        "title": "Test Project",
-        "description": "Test project description",
-        "short_description": "Test short description",
-        "goal_amount": 5000.0,
-        "category": "technology",
-        "tags": ["tech", "innovation"],
-        "creator_id": 1,
-        "current_amount": 0.0,
-        "status": "draft",
-        "is_featured": False,
-        "created_at": "2023-01-01T00:00:00",
-        "updated_at": "2023-01-01T00:00:00",
-        "views_count": 0,
-        "likes_count": 0,
-        "shares_count": 0,
-        "backers_count": 0,
-        "progress_percentage": 0.0,
-        "days_remaining": None,
-        "is_funded": False,
-        "media": []
-    }
+@pytest.fixture(scope="session")
+def event_loop():
+    """Создает event loop для тестов"""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
 
 
 @pytest.fixture(scope="function")
-def client(current_user_mock):
-    """Test client с тестовым приложением и переопределенной аутентификацией"""
+async def client(current_user_mock) -> TestClient:
+    """Test client с асинхронной тестовой БД"""
     # Создаем таблицы
-    Base.metadata.create_all(bind=engine)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-    def override_get_db():
-        try:
-            db = TestingSessionLocal()
-            yield db
-        finally:
-            db.close()
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        async with TestingAsyncSessionLocal() as session:
+            try:
+                yield session
+            finally:
+                await session.close()
 
-    # Переопределяем аутентификацию
     async def override_get_current_user():
-        print(f"✅ MOCK get_current_user called, returning user: {current_user_mock.id}")
         return current_user_mock
 
     # Создаем тестовое приложение
@@ -208,31 +159,23 @@ def client(current_user_mock):
     with TestClient(test_app) as test_client:
         yield test_client
 
-    # Очищаем переопределения
+    # Очищаем переопределения и таблицы
     test_app.dependency_overrides.clear()
-    Base.metadata.drop_all(bind=engine)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
 
 
-@pytest.fixture
-def db_session():
-    """Фикстура для доступа к тестовой сессии БД"""
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+@pytest.fixture(scope="function")
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Фикстура для доступа к асинхронной тестовой сессии БД"""
+    async with TestingAsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
 
 
-# Фикстура для восстановления оригинальных функций (если понадобится)
-@pytest.fixture
-def restore_original_auth_functions():
-    """Восстанавливает оригинальные функции аутентификации"""
-    try:
-        import src.security.auth as auth_module
-        if hasattr(auth_module, 'original_get_password_hash'):
-            auth_module.get_password_hash = auth_module.original_get_password_hash
-        if hasattr(auth_module, 'original_verify_password'):
-            auth_module.verify_password = auth_module.original_verify_password
-        print("✅ Оригинальные функции аутентификации восстановлены")
-    except Exception as e:
-        print(f"⚠️ Не удалось восстановить оригинальные функции: {e}")
+# Глобальная настройка pytest для асинхронных тестов
+def pytest_configure(config):
+    """Конфигурация pytest для асинхронных тестов"""
+    config.option.asyncio_mode = "auto"

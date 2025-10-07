@@ -68,7 +68,7 @@ from fastapi.security import OAuth2PasswordBearer
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="verify-2fa")
 
 
-# Этот метод оставляем синхронным для зависимостей FastAPI
+# !!! Этот метод оставляем синхронным для зависимостей FastAPI !!!
 async def get_current_user(
         token: str = Depends(oauth2_scheme),
         db: AsyncSession = Depends(get_db)
@@ -173,7 +173,6 @@ async def verify_sms_code(db: AsyncSession, user_id: int, code: str):
         await db.commit()
 
     return False
-
 
 async def get_user_by_email(db: AsyncSession, email: str):
     """Получение пользователя по email"""

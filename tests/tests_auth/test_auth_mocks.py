@@ -24,3 +24,4 @@ def test_auth_mocks_work():
     assert verify_password("wrong", hashed) == False
 
 # pytest tests/tests_auth/test_auth_mocks.py -v -s
+# pytest tests/tests_auth/test_auth_mocks.py --html=report.html

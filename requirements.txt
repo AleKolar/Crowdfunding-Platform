@@ -54,3 +54,13 @@ websockets==15.0.1
 
 # Тесты
 coveralls==3.3.1
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+httpx==0.25.2
+coverage==7.3.2
+aiosqlite==0.21.0
+pytest-asyncio==0.21.1
+
+
+

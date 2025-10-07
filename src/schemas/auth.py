@@ -8,7 +8,7 @@ class UserRegister(BaseModel):
     email: EmailStr
     phone: str
     username: str
-    secret_code: str  # 4 цифры, которые пользователь запомнит
+    secret_code: str  # 4 цифры (КОД) пользователя
     password: str
 
     @field_validator('password')
