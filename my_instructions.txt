@@ -1,5 +1,5 @@
 git add .
-git commit -m "added tests for transactions,wallets,likes,posts,comments"
+git commit -m "added tests statistics"
 git push origin main
 
 git add .
