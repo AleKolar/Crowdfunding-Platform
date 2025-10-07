@@ -121,7 +121,7 @@ def valid_register_data():
         "username": f"user_{unique_id}",
         "is_active": True,
         "password": "TestPass123!",
-        "secret_code": "123456"
+        "secret_code": "1234"
     }
 
 
