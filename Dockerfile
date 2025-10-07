@@ -20,8 +20,8 @@ WORKDIR /app
 
 # Устанавливаем только runtime зависимости
 RUN apt-get update && apt-get install -y \
-    # Добавьте сюда зависимости, нужные в runtime
-    # например, для PostgreSQL: libpq5
+    # Добавляем сюда зависимости, нужные в runtime
+    # для PostgreSQL: libpq5
     && rm -rf /var/lib/apt/lists/*
 
 # Копируем установленные пакеты из builder стадии
