@@ -8,7 +8,7 @@ class UserRegister(BaseModel):
     email: EmailStr
     phone: str
     username: str
-    secret_code: str
+    secret_code: str  # 4 цифры, которые пользователь запомнит
     password: str
 
     @field_validator('password')
@@ -19,18 +19,31 @@ class UserRegister(BaseModel):
 
     @field_validator('phone')
     def phone_format(cls, v):
-        # Базовая валидация телефона
         if not v.startswith('+'):
             raise ValueError('Телефон должен начинаться с +')
         return v
 
+    @field_validator('secret_code')
+    def validate_secret_code(cls, v):
+        if not v.isdigit():
+            raise ValueError('Секретный код должен содержать только цифры')
+        if len(v) != 4:
+            raise ValueError('Секретный код должен быть 4 цифры')
+        return v
+
 
 class UserLogin(BaseModel):
-    """Схема входа пользователя"""
+    """Схема входа пользователя - ТОЛЬКО email и секретный код"""
     email: EmailStr
     secret_code: str
 
+    @field_validator('secret_code')
+    def validate_secret_code(cls, v):
+        if not v.isdigit() or len(v) != 4:
+            raise ValueError('Секретный код должен быть 4 цифры')
+        return v
 
+# остальные схемы без изменений...
 class Verify2FARequest(BaseModel):
     """Схема верификации 2FA"""
     user_id: int

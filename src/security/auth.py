@@ -1,12 +1,11 @@
-# security/auth.py
+# src/security/auth.py
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, delete
 import secrets
 
 from src.config.settings import settings
@@ -36,8 +35,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({
         "exp": expire,
         "2fa_verified": True,
-        "iss": "your-auth-service",  # Issuer
-        "aud": "your-api-service"  # Audience
+        "iss": "your-auth-service",
+        "aud": "your-api-service"
     })
 
     encoded_jwt = jwt.encode(
@@ -69,9 +68,10 @@ from fastapi.security import OAuth2PasswordBearer
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="verify-2fa")
 
 
+# Этот метод оставляем синхронным для зависимостей FastAPI
 async def get_current_user(
         token: str = Depends(oauth2_scheme),
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
     """Получение текущего пользователя с проверкой 2FA статуса"""
     credentials_exception = HTTPException(
@@ -93,25 +93,31 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    # ✅ SQLAlchemy 2.x стиль
-    user = db.scalar(
+    # Асинхронный запрос к БД
+    result = await db.execute(
         select(models.User).where(models.User.id == int(user_id))
     )
+    user = result.scalar_one_or_none()
+
     if user is None:
         raise credentials_exception
     return user
 
 
-def authenticate_user(db: Session, email: str, secret_code: str):
+async def authenticate_user(db: AsyncSession, email: str, secret_code: str):
     """Аутентификация пользователя по email и секретному коду"""
-    # ✅ SQLAlchemy 2.x стиль
-    user = db.scalar(
+    result = await db.execute(
         select(models.User).where(models.User.email == email)
     )
+    user = result.scalar_one_or_none()
+
     if not user:
         return False
-    if not verify_password(secret_code, user.secret_code):
+
+    # ПРЯМОЕ СРАВНЕНИЕ! Не хэшируем!
+    if user.secret_code != secret_code:
         return False
+
     return user
 
 
@@ -119,6 +125,13 @@ async def generate_and_send_sms_code(db: AsyncSession, user: models.User) -> str
     """Генерация и отправка SMS кода"""
     code = ''.join(secrets.choice('0123456789') for _ in range(6))
     expires_at = datetime.now() + timedelta(minutes=settings.SMS_CODE_EXPIRE_MINUTES)
+
+    # Удаляем старые коды пользователя
+    await db.execute(
+        delete(models.SMSVerificationCode).where(
+            models.SMSVerificationCode.user_id == user.id
+        )
+    )
 
     sms_code = models.SMSVerificationCode(
         user_id=user.id,
@@ -130,16 +143,18 @@ async def generate_and_send_sms_code(db: AsyncSession, user: models.User) -> str
     await db.commit()
     await db.refresh(sms_code)
 
-    await sms_service.send_verification_code(user.phone, code)
+    # В development просто логируем
+    print(f"📱 SMS код для {user.phone}: {code}")
+    # В production: await sms_service.send_verification_code(user.phone, code)
+
     return code
 
 
-def verify_sms_code(db: Session, user_id: int, code: str):
+async def verify_sms_code(db: AsyncSession, user_id: int, code: str):
     """Верификация SMS кода"""
-    # ✅ SQLAlchemy 2.x стиль
     now = datetime.now()
 
-    sms_code = db.scalar(
+    result = await db.execute(
         select(models.SMSVerificationCode).where(
             models.SMSVerificationCode.user_id == user_id,
             models.SMSVerificationCode.code == code,
@@ -147,46 +162,47 @@ def verify_sms_code(db: Session, user_id: int, code: str):
             models.SMSVerificationCode.expires_at >= now
         )
     )
+    sms_code = result.scalar_one_or_none()
 
     if sms_code and sms_code.attempt_count < 3:
         sms_code.attempt_count += 1
         if sms_code.code == code:
             sms_code.is_used = True
-            db.commit()
+            await db.commit()
             return True
-        db.commit()
+        await db.commit()
 
     return False
 
 
-def get_user_by_email(db: Session, email: str) -> Optional[models.User]:
+async def get_user_by_email(db: AsyncSession, email: str):
     """Получение пользователя по email"""
-    # ✅ SQLAlchemy 2.x стиль
-    return db.scalar(
+    result = await db.execute(
         select(models.User).where(models.User.email == email)
     )
+    return result.scalar_one_or_none()
 
 
-def get_user_by_phone(db: Session, phone: str) -> Optional[models.User]:
+async def get_user_by_phone(db: AsyncSession, phone: str):
     """Получение пользователя по телефону"""
-    # ✅ SQLAlchemy 2.x стиль
-    return db.scalar(
+    result = await db.execute(
         select(models.User).where(models.User.phone == phone)
     )
+    return result.scalar_one_or_none()
 
 
-def cleanup_expired_sms_codes(db: Session):
+async def cleanup_expired_sms_codes(db: AsyncSession):
     """Очистка просроченных SMS кодов"""
-    # ✅ SQLAlchemy 2.x стиль
     now = datetime.now()
-    expired_codes = db.scalars(
+    result = await db.execute(
         select(models.SMSVerificationCode).where(
             models.SMSVerificationCode.expires_at < now
         )
-    ).all()
+    )
+    expired_codes = result.scalars().all()
 
     for code in expired_codes:
-        db.delete(code)
+        await db.delete(code)
 
-    db.commit()
+    await db.commit()
     return len(expired_codes)
