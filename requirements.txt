@@ -47,7 +47,7 @@ pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 coverage==7.3.2
 aiosqlite==0.21.0
-coveralls==3.3.1
+coveralls==5.0.1
 
 
 
