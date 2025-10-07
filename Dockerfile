@@ -1,41 +1,41 @@
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim as builder
 
 WORKDIR /app
-
+# !!! Внимательно (мульти-стадийная сборка)
+# Устанавливаем системные зависимости для сборки
 RUN apt-get update && apt-get install -y \
     gcc \
-    g++ \
-    libpq-dev \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Копируем и устанавливаем зависимости
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --user -r requirements.txt
 
+# Финальный образ
 FROM python:3.11-slim
 
 WORKDIR /app
 
+# Устанавливаем только runtime зависимости
 RUN apt-get update && apt-get install -y \
-    libpq5 \
-    curl \
+    # Добавьте сюда зависимости, нужные в runtime
+    # например, для PostgreSQL: libpq5
     && rm -rf /var/lib/apt/lists/*
 
+# Копируем установленные пакеты из builder стадии
 COPY --from=builder /root/.local /root/.local
 
-RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app
-USER app
+# Добавляем .local/bin в PATH
+ENV PATH=/root/.local/bin:$PATH
 
-COPY --chown=app:app . .
+# Копируем исходный код
+COPY . .
 
-ENV ENV PATH=/home/app/.local/bin:$PATH
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
+# Создаем пользователя для безопасности
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
 
-EXPOSE 8000
-
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Команда запуска
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
