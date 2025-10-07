@@ -25,7 +25,4 @@ omit = ["*/tests/*", "*/test_*"]
 [project.scripts]
 test-stats = "update_test_stats:main"
 
-[tool.pytest.ini_options]
-minversion = "6.0"
-addopts = "--cov=src --cov-report=html --cov-report=term-missing --html=report.html --self-contained-html"
 testpaths = ["tests"]

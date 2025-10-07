@@ -95,40 +95,9 @@ jobs:
     - name: Update README with test stats
       if: github.ref == 'refs/heads/main'
       run: |
-        # Получаем статистику тестов
-        TESTS_PASSED=$(python -c "
-        import re, subprocess
-        result = subprocess.run(['pytest', 'tests/', '-v'], capture_output=True, text=True)
-        output = result.stdout
-        passed = re.search(r'(\d+) passed', output)
-        failed = re.search(r'(\d+) failed', output)
-        skipped = re.search(r'(\d+) skipped', output)
-        print(f'{passed.group(1) if passed else 0},{failed.group(1) if failed else 0},{skipped.group(1) if skipped else 0}')
-        ")
-        
-        IFS=',' read -r TESTS_PASSED TESTS_FAILED TESTS_SKIPPED <<< \"$TESTS_PASSED\"
-        
-        echo \"📊 Test Results: $TESTS_PASSED passed, $TESTS_FAILED failed, $TESTS_SKIPPED skipped\"
-        
-        # Обновляем README
-        python -c "
-        import re
-        with open('README.md', 'r') as f:
-            content = f.read()
-        
-        total = $TESTS_PASSED + $TESTS_FAILED + $TESTS_SKIPPED
-        
-        content = re.sub(r'\\*\\*Total Tests\\*\\* \\| .* \\|', f'**Total Tests** | {total} |', content)
-        content = re.sub(r'\\*\\*Tests Passed\\*\\* \\| .* \\|', f'**Tests Passed** | {$TESTS_PASSED} ✅ |', content)
-        content = re.sub(r'\\*\\*Tests Skipped\\*\\* \\| .* \\|', f'**Tests Skipped** | {$TESTS_SKIPPED} ⏭️ |', content)
-        
-        with open('README.md', 'w') as f:
-            f.write(content)
-        "
-        
-        # Коммитим изменения
-        git config --local user.email \"action@github.com\"
-        git config --local user.name \"GitHub Action\"
+        python .github/scripts/ci_update_readme.py
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
         git add README.md
-        git commit -m \"📊 Update test statistics: $TESTS_PASSED passed, $TESTS_FAILED failed, $TESTS_SKIPPED skipped [skip ci]\" || exit 0
+        git commit -m "📊 Update test statistics [skip ci]" || echo "No changes to commit"
         git push

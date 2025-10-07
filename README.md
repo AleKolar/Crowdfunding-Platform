@@ -2,10 +2,10 @@
 
 | Metric | Status |
 |--------|--------|
-| **Total Tests** | 0 |
-| **Tests Passed** | 0 ✅ |
+| **Total Tests** | {dynamic_total} |
+| **Tests Passed** | {dynamic_passed} ✅ |
 | **Tests Failed** | {dynamic_failed} ❌ |
-| **Tests Skipped** | 0 ⏭️ |
+| **Tests Skipped** | {dynamic_skipped} ⏭️ |
 | **Test Coverage** | ![Coverage](https://coveralls.io/repos/github/AleKolar/Crowdfunding-Platform/badge.svg?branch=main) |
 | **Code Quality** | Enforced via CI/CD |
 
