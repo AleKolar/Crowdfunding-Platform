@@ -150,9 +150,8 @@ if os.getenv("ENVIRONMENT") == "production":
     app.add_middleware(cast(Any, SlowAPIMiddleware))
 
 
-# Health check endpoint
+# Health
 @app.get("/health", tags=["System"])
-@limiter.limit("100/minute")
 async def health_check(request: Request):
     """Проверка здоровья системы"""
     health_status = {
