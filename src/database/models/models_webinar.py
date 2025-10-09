@@ -1,4 +1,4 @@
-# src/database/models/webinar_models.py
+# src/database/models/models_webinar.py
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -20,8 +20,14 @@ class Webinar(Base):
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
+    # ✅ ССЫЛКА НА СОЗДАТЕЛЯ
+    creator_id = Column(Integer, ForeignKey("users.id"))
+
     project = relationship("Project", back_populates="webinars")
     registrations = relationship("WebinarRegistration", back_populates="webinar", cascade="all, delete-orphan")
+
+    # ✅ СВЯЗЬ С СОЗДАТЕЛЕМ
+    creator = relationship("User", back_populates="created_webinars")
 
     # Вычисляемые свойства
     @property

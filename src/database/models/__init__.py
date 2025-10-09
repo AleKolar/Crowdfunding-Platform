@@ -1,7 +1,6 @@
 # src/database/models/__init__.py
 from .base import Base
 
-# Экспортируем все модели для Alembic
 __all__ = [
     'Base',
     'User', 'SMSVerificationCode',

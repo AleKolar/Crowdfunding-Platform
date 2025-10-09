@@ -8,7 +8,7 @@ class TemplateService:
         # Путь к директории с шаблонами
         self.templates_dir = Path(__file__).parent.parent / "templates"
 
-        # Создаем Jinja2 environment
+        # Jinja2 environment
         self.env = Environment(
             loader=FileSystemLoader(self.templates_dir),
             autoescape=select_autoescape(['html', 'xml']),

@@ -1,38 +1,86 @@
 <!-- src/templates/emails/webinar_reminder.html -->
-{% extends "emails/base.html" %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Напоминание о вебинаре</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif; line-height: 1.6; color: #333333; background-color: #f8f9fa;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden;">
 
-{% block title %}Напоминание о вебинаре{% endblock %}
+        <!-- Шапка -->
+        <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ffa726 100%); color: white; padding: 40px 30px; text-align: center;">
+            <div style="margin: 0; font-size: 28px; font-weight: 700;">🔔 Напоминание о вебинаре</div>
+            <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Вебинар скоро начнется!</p>
+        </div>
 
-{% block header %}
-<div class="logo">
-    <h1>🔔 Напоминание о вебинаре</h1>
-    <p>Не пропустите важное событие!</p>
-</div>
-{% endblock %}
+        <!-- Контент -->
+        <div style="padding: 40px 30px; background-color: #f8f9fa;">
+            <h2 style="margin: 0 0 20px 0; color: #2c3e50;">Привет, {{ username }}!</h2>
+            <p style="margin: 0 0 20px 0; color: #666;">Напоминаем, что вебинар начинается через 1 час:</p>
 
-{% block content %}
-<div class="content-card">
-    <h2>Привет, {{ username }}!</h2>
-    <p>Напоминаем, что через час начинается вебинар:</p>
-    
-    <div style="text-align: center; margin: 30px 0;">
-        <h3 style="color: #667eea; margin-bottom: 10px;">{{ webinar_title }}</h3>
-        <p style="font-size: 16px; color: #666;">
-            🕐 {{ scheduled_at }}
-        </p>
+            <!-- Карточка с информацией о вебинаре -->
+            <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); margin-bottom: 20px; border-left: 4px solid #ff6b6b;">
+                <h3 style="margin: 0 0 15px 0; color: #2c3e50;">{{ webinar_title }}</h3>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                    <div style="display: flex; align-items: center;">
+                        <span style="font-size: 18px; margin-right: 10px;">⏰</span>
+                        <span><strong>Начало:</strong> {{ scheduled_at }}</span>
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        <span style="font-size: 18px; margin-right: 10px;">⏱️</span>
+                        <span><strong>Продолжительность:</strong> {{ duration }} минут</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Подготовка -->
+            <div style="background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h4 style="margin: 0 0 15px 0; color: #2c3e50;">🎯 Подготовка к вебинару</h4>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                    <div style="display: flex; align-items: flex-start;">
+                        <span style="font-size: 16px; margin-right: 10px; margin-top: 2px;">•</span>
+                        <span>Проверьте подключение к интернету</span>
+                    </div>
+                    <div style="display: flex; align-items: flex-start;">
+                        <span style="font-size: 16px; margin-right: 10px; margin-top: 2px;">•</span>
+                        <span>Заранее войдите в систему</span>
+                    </div>
+                    <div style="display: flex; align-items: flex-start;">
+                        <span style="font-size: 16px; margin-right: 10px; margin-top: 2px;">•</span>
+                        <span>Подготовьте вопросы спикеру</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Кнопка присоединения -->
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{ webinar_url }}" style="display: inline-block; background: linear-gradient(135deg, #ff6b6b 0%, #ffa726 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                    Присоединиться к вебинару
+                </a>
+            </div>
+
+            <p style="text-align: center; color: #666; margin: 20px 0;">Не пропустите важное событие! 🎯</p>
+        </div>
+
+        <!-- Подвал -->
+        <div style="text-align: center; padding: 25px 30px; background: #2c3e50; color: white;">
+            <p style="margin: 0 0 10px 0;">С уважением, команда CrowdPlatform</p>
+            <p style="font-size: 12px; color: #bdc3c7; margin: 15px 0 0 0;">© 2024 CrowdPlatform. Все права защищены.</p>
+        </div>
     </div>
-    
-    <div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
-        <p style="margin: 0; color: #2c3e50;">
-            <strong>💡 Подготовка к вебинару:</strong><br>
-            • Проверьте подключение к интернету<br>
-            • Заранее войдите в систему<br>
-            • Подготовьте вопросы спикеру
-        </p>
-    </div>
-    
-    <div style="text-align: center; margin-top: 30px;">
-        <a href="{{ webinar_url }}" class="btn-primary">Перейти к вебинару</a>
-    </div>
-</div>
-{% endblock %}
+
+    <style>
+        @media only screen and (max-width: 600px) {
+            div[style*="max-width: 600px"] {
+                border-radius: 0 !important;
+                border: none !important;
+            }
+            div[style*="padding: 40px 30px"] {
+                padding: 25px 20px !important;
+            }
+        }
+    </style>
+</body>
+</html>

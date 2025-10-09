@@ -7,6 +7,7 @@ import logging
 
 from src.config.settings import settings
 from src.database import models
+from src.repository.webinar_repository import webinar_repository
 from src.services.email_service import email_service
 from src.services.template_service import template_service
 
@@ -46,51 +47,35 @@ def send_welcome_email(user_email: str, username: str):
 
 @celery.task
 def send_webinar_reminders():
-    """Отправка напоминаний о вебинарах"""
+    """Отправка напоминаний о вебинарах через систему уведомлений"""
     db = SessionLocal()
     try:
-        # Вебинары, которые начнутся через 1 час
-        one_hour_from_now = datetime.now() + timedelta(hours=1)
-        time_range_start = one_hour_from_now - timedelta(minutes=5)
-        time_range_end = one_hour_from_now + timedelta(minutes=5)
-
-        webinars = db.scalars(
-            select(models.Webinar).where(
-                models.Webinar.scheduled_at.between(time_range_start, time_range_end),
-                models.Webinar.status == "scheduled"
-            )
-        ).all()
+        from src.services.notification_service import notification_service
+        webinars = webinar_repository.get_upcoming_webinars_for_reminders(db)
 
         for webinar in webinars:
-            # Находим регистрации без отправленных напоминаний
-            registrations = db.scalars(
-                select(models.WebinarRegistration).where(
-                    models.WebinarRegistration.webinar_id == webinar.id,
-                    models.WebinarRegistration.reminder_sent == False
-                )
-            ).all()
+
+            registrations = webinar_repository.get_registrations_for_reminder(db, webinar.id)
 
             for registration in registrations:
-                # Отправляем email напоминание
-                send_webinar_reminder_email.delay(
-                    registration.user.email,
-                    registration.user.username,
-                    webinar.title,
-                    webinar.scheduled_at,
-                    webinar.id
-                )
-
-                # Создаем платформенное уведомление
-                notification = models.Notification(
+                # Отправляем уведомление через систему уведомлений
+                notification_service.create_notification(
+                    db=db,
                     user_id=registration.user_id,
                     title="🔔 Вебинар скоро начнется",
                     message=f"Вебинар '{webinar.title}' начинается через 1 час",
-                    notification_type="webinar_reminder"
+                    notification_type="webinar_reminder",
+                    related_entity_type="webinar",
+                    related_entity_id=webinar.id,
+                    action_url=f"{settings.PLATFORM_URL}/webinars/{webinar.id}/join",
+                    meta_data={
+                        "webinar_title": webinar.title,
+                        "scheduled_at": webinar.scheduled_at.isoformat(),
+                        "webinar_id": webinar.id
+                    }
                 )
-                db.add(notification)
 
-                # Помечаем как отправленное
-                registration.reminder_sent = True
+                webinar_repository.mark_reminder_sent(db, registration.id)
 
             db.commit()
 
@@ -102,7 +87,8 @@ def send_webinar_reminders():
 
 
 @celery.task
-def send_webinar_reminder_email(user_email: str, username: str, webinar_title: str, scheduled_at: datetime, webinar_id: int):
+def send_webinar_reminder_email(user_email: str, username: str, webinar_title: str, scheduled_at: datetime,
+                                webinar_id: int):
     """Email напоминание о вебинаре"""
     try:
         subject = f"🔔 Напоминание: вебинар '{webinar_title}'"
@@ -112,6 +98,7 @@ def send_webinar_reminder_email(user_email: str, username: str, webinar_title: s
             username=username,
             webinar_title=webinar_title,
             scheduled_at=scheduled_at.strftime("%d.%m.%Y в %H:%M"),
+            duration=60,  # Добавляем продолжительность
             webinar_url=f"{settings.PLATFORM_URL}/webinars/{webinar_id}/join"
         )
 
@@ -125,27 +112,93 @@ def send_webinar_reminder_email(user_email: str, username: str, webinar_title: s
 
 
 @celery.task
-def send_webinar_registration_confirmation(user_email: str, username: str, webinar_title: str, scheduled_at: datetime):
-    """Простое письмо подтверждения регистрации"""
+def process_email_queue():
+    """ НОВАЯ ЗАДАЧА: Обработка очереди email"""
+    db = SessionLocal()
     try:
-        subject = f"🎉 Вы зарегистрированы на вебинар: {webinar_title}"
+        from src.services.email_service import email_service
 
-        html_content = f"""
-        <h2>Привет, {username}!</h2>
-        <p>Вы успешно зарегистрировались на вебинар:</p>
-        <h3>"{webinar_title}"</h3>
-        <p><strong>🗓️ Дата и время:</strong> {scheduled_at.strftime('%d.%m.%Y в %H:%M')}</p>
-        <p>Мы напомним вам за 1 час до начала.</p>
-        <p>--<br>Команда CrowdPlatform</p>
-        """
+        # Берем emails с высоким приоритетом сначала
+        pending_emails = db.scalars(
+            select(models.EmailQueue).where(
+                models.EmailQueue.status == "pending"
+            ).order_by(
+                models.EmailQueue.priority.asc(),
+                models.EmailQueue.created_at.asc()
+            ).limit(10)  # Обрабатываем по 10 за раз
+        ).all()
 
-        if settings.ENVIRONMENT == "production":
-            email_service.send_email(user_email, subject, html_content)
-        else:
-            logger.info(f"📧 Simple registration email for {user_email}")
+        for email_job in pending_emails:
+            try:
+                # Отправляем email
+                success = email_service.send_email(
+                    email_job.email,
+                    email_job.subject,
+                    email_job.template_data.get("message", "")
+                )
+
+                if success:
+                    email_job.status = "sent"
+                    email_job.sent_at = datetime.now()
+                else:
+                    email_job.status = "failed"
+                    email_job.error_message = "SMTP error"
+
+                db.commit()
+
+            except Exception as e:
+                email_job.retry_count += 1
+                if email_job.retry_count >= email_job.max_retries:
+                    email_job.status = "failed"
+                    email_job.error_message = str(e)
+                else:
+                    email_job.status = "retrying"
+
+                db.commit()
+                logger.error(f"Error processing email queue item {email_job.id}: {e}")
 
     except Exception as e:
-        logger.error(f"Error sending registration email: {e}")
+        logger.error(f"Error processing email queue: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+@celery.task
+def cleanup_old_data():
+    """ НОВАЯ ЗАДАЧА: Очистка устаревших данных"""
+    db = SessionLocal()
+    try:
+        # Очистка старых уведомлений (старше 30 дней)
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        old_notifications = db.scalars(
+            select(models.Notification).where(
+                models.Notification.created_at < thirty_days_ago
+            )
+        ).all()
+
+        for notification in old_notifications:
+            db.delete(notification)
+
+        # Очистка отправленных email из очереди (старше 7 дней)
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        old_emails = db.scalars(
+            select(models.EmailQueue).where(
+                models.EmailQueue.sent_at < seven_days_ago
+            )
+        ).all()
+
+        for email in old_emails:
+            db.delete(email)
+
+        db.commit()
+        logger.info(f"Cleaned up {len(old_notifications)} notifications and {len(old_emails)} emails")
+
+    except Exception as e:
+        logger.error(f"Error cleaning up old data: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 
 @celery.task

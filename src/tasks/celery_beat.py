@@ -1,4 +1,4 @@
-# src/services/tasks/celery_beat.py
+# src/tasks/celery_beat.py
 from celery import Celery
 from datetime import timedelta
 
@@ -6,15 +6,19 @@ celery = Celery('crowdfunding')
 
 celery.conf.beat_schedule = {
     'send-webinar-reminders': {
-        'task': 'worker.tasks.notify_webinar_registrants',
-        'schedule': timedelta(minutes=30),  # Каждые 30 минут
+        'task': 'src.tasks.tasks.send_webinar_reminders',
+        'schedule': timedelta(minutes=5),
     },
-    'cleanup-old-notifications': {
-        'task': 'worker.tasks.cleanup_old_notifications',
-        'schedule': timedelta(days=1),  # Ежедневно
+    'process-email-queue': {
+        'task': 'src.tasks.tasks.process_email_queue',
+        'schedule': timedelta(minutes=1),
+    },
+    'cleanup-old-data': {
+        'task': 'src.tasks.tasks.cleanup_old_data',
+        'schedule': timedelta(days=1),
     },
     'update-project-statistics': {
-        'task': 'worker.tasks.update_project_statistics',
-        'schedule': timedelta(hours=1),  # Каждый час
+        'task': 'src.tasks.tasks.update_project_statistics',
+        'schedule': timedelta(hours=1),
     },
 }

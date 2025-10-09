@@ -1,8 +1,9 @@
-# src/database/models/auth_models.py
+# src/database/models/models_auth.py
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from .base import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -18,7 +19,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.now)
     last_login = Column(DateTime, nullable=True)
 
-    # Связи с другими таблицами
+
     profile = relationship("UserProfile", back_populates="user", uselist=False)
     settings = relationship("UserSettings", back_populates="user", uselist=False)
     notification_settings = relationship("UserNotificationSettings", back_populates="user", uselist=False)
@@ -31,7 +32,7 @@ class User(Base):
     likes = relationship("Like", back_populates="user")
     reposts = relationship("Repost", back_populates="user")
 
-    # Явные связи для подписок
+
     subscriptions_as_subscriber = relationship(
         "Subscription",
         primaryjoin="User.id == Subscription.subscriber_id",
@@ -42,6 +43,35 @@ class User(Base):
         "Subscription",
         primaryjoin="User.id == Subscription.creator_id",
         back_populates="creator"
+    )
+
+    # ✅ СВЯЗЬ ДЛЯ ВЕБИНАРОВ
+    webinar_registrations = relationship(
+        "WebinarRegistration",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+
+    # Если пользователь может создавать вебинары, добавляем:
+    created_webinars = relationship(
+        "Webinar",
+        back_populates="creator",
+        cascade="all, delete-orphan"
+    )
+
+    # ✅ СВЯЗЬ С УВЕДОМЛЕНИЯМИ
+    notifications = relationship(
+        "Notification",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+
+    # ✅ СВЯЗЬ С НАСТРОЙКАМИ УВЕДОМЛЕНИЙ
+    notification_settings = relationship(
+        "UserNotificationSettings",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan"
     )
 
 

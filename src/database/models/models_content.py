@@ -39,7 +39,7 @@ class Project(Base):
     title = Column(String, index=True)
     description = Column(Text)
     short_description = Column(String(500))
-    cover_image = Column(String)  # Главное изображение проекта
+    cover_image = Column(String)  # Титульник проекта
     goal_amount = Column(Float)
     current_amount = Column(Float, default=0.0)
     category = Column(String)

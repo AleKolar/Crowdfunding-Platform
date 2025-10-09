@@ -1,6 +1,6 @@
 # src/schemas/notification.py
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 
@@ -13,26 +13,44 @@ class NotificationBase(BaseModel):
     related_entity_id: Optional[int] = None
     action_url: Optional[str] = None
     image_url: Optional[str] = None
+    meta_data: Optional[Dict[str, Any]] = None
 
 
 class NotificationResponse(NotificationBase):
     """Схема ответа уведомления"""
     id: int
     user_id: int
-    is_read: bool
-    is_sent: bool
-    meta_data: Optional[Dict[str, Any]]
+    is_read: bool = False
+    is_sent: bool = False
+    send_via_email: bool = False
+    send_via_push: bool = False
+    send_via_websocket: bool = True
     created_at: datetime
-    read_at: Optional[datetime]
-    sent_at: Optional[datetime]
+    read_at: Optional[datetime] = None
+    sent_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationListResponse(BaseModel):
+    """Схема ответа списка уведомлений"""
+    success: bool = True
+    notifications: List[NotificationResponse]
+    unread_count: int = 0
+    pagination: Optional[dict] = None
 
 
 class NotificationUpdate(BaseModel):
     """Схема обновления уведомления"""
     is_read: Optional[bool] = None
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class MarkAsReadResponse(BaseModel):
+    """Схема ответа пометки как прочитанного"""
+    success: bool = True
+    message: str = "Уведомление помечено как прочитанное"
 
 
 class NotificationTemplateBase(BaseModel):
@@ -48,12 +66,29 @@ class NotificationTemplateBase(BaseModel):
 class NotificationTemplateResponse(NotificationTemplateBase):
     """Схема ответа шаблона"""
     id: int
-    is_active: bool
+    is_active: bool = True
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationTemplateCreate(NotificationTemplateBase):
+    """Схема создания шаблона"""
+    pass
+
+
+class NotificationTemplateUpdate(BaseModel):
+    """Схема обновления шаблона"""
+    template_type: Optional[str] = None
+    title_template: Optional[str] = None
+    message_template: Optional[str] = None
+    email_subject: Optional[str] = None
+    email_template: Optional[str] = None
+    push_template: Optional[str] = None
+    is_active: Optional[bool] = None
+
+    model_config = ConfigDict(extra='forbid')
 
 
 class UserNotificationSettingsBase(BaseModel):
@@ -84,8 +119,7 @@ class UserNotificationSettingsResponse(UserNotificationSettingsBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EmailQueueBase(BaseModel):
@@ -101,13 +135,46 @@ class EmailQueueResponse(EmailQueueBase):
     """Схема ответа очереди email"""
     id: int
     user_id: int
-    status: str
-    retry_count: int
-    max_retries: int
-    error_message: Optional[str]
+    status: str = "pending"
+    retry_count: int = 0
+    max_retries: int = 3
+    error_message: Optional[str] = None
     scheduled_for: datetime
-    sent_at: Optional[datetime]
+    sent_at: Optional[datetime] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EmailQueueCreate(EmailQueueBase):
+    """Схема создания email в очереди"""
+    user_id: int
+
+
+class EmailQueueUpdate(BaseModel):
+    """Схема обновления email в очереди"""
+    status: Optional[str] = None
+    retry_count: Optional[int] = None
+    error_message: Optional[str] = None
+    sent_at: Optional[datetime] = None
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class NotificationCreateRequest(BaseModel):
+    """Схема запроса создания уведомления"""
+    user_id: int
+    title: str
+    message: str
+    notification_type: str
+    related_entity_type: Optional[str] = None
+    related_entity_id: Optional[int] = None
+    action_url: Optional[str] = None
+    meta_data: Optional[Dict[str, Any]] = None
+
+
+class NotificationCreateResponse(BaseModel):
+    """Схема ответа создания уведомления"""
+    success: bool = True
+    notification: NotificationResponse
+    message: str = "Уведомление создано успешно"

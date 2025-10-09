@@ -36,8 +36,7 @@ class Notification(Base):
     read_at = Column(DateTime, nullable=True)
     sent_at = Column(DateTime, nullable=True)
 
-    user = relationship("User")
-
+    user = relationship("User", back_populates="notifications")
 
 class NotificationTemplate(Base):
     __tablename__ = "notification_templates"
@@ -95,7 +94,7 @@ class EmailQueue(Base):
     template_name = Column(String)
     template_data = Column(JSON)
     status = Column(String, default="pending")  # pending, sent, failed, retrying
-    priority = Column(Integer, default=1)  # 1-высокий, 5-низкий
+    priority = Column(Integer, default=1)  # !!! 1-высокий, 5-низкий
     retry_count = Column(Integer, default=0)
     max_retries = Column(Integer, default=3)
     error_message = Column(Text, nullable=True)

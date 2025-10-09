@@ -1,5 +1,5 @@
 git add .
-git commit -m "added tests statistics"
+git commit -m "added webinar_service with the mailing of emails and notification by tasks"
 git push origin main
 
 git add .

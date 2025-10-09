@@ -12,6 +12,7 @@ import time
 
 from src.database.postgres import create_tables, engine
 from src.database.redis_client import redis_manager
+from src.endpoints import webinars
 from src.endpoints.auth import auth_router
 from src.endpoints.comments import comments_router
 from src.endpoints.likes import likes_router
@@ -220,6 +221,7 @@ app.include_router(projects_router)
 app.include_router(projects_web_router)
 app.include_router(comments_router)
 app.include_router(likes_router)
+app.include_router(webinars.webinar_router)
 
 print("🔍 Зарегистрированные пути:")
 for route in app.routes:

@@ -5,11 +5,13 @@ from typing import Dict, Any
 
 from livekit.api import AccessToken
 from livekit.api.access_token import VideoGrants
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.settings import settings
 from src.database import models
+from src.services.template_service import template_service
+from src.repository.webinar_repository import webinar_repository
+from src.repository.user_repository import user_repository
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +57,7 @@ class WebinarService:
         grants.room = room_name
         grants.can_publish = False
         grants.can_subscribe = True
-        grants.can_publish_data = True  # Разрешаем чат
+        grants.can_publish_data = True
         grants.room_admin = False
         grants.hidden = False
         grants.recorder = False
@@ -73,34 +75,18 @@ class WebinarService:
     async def register_for_webinar(self, db: AsyncSession, webinar_id: int, user_id: int) -> Dict[str, Any]:
         """СУПЕР-ПРОСТАЯ регистрация на вебинар - ОДИН КЛИК"""
         try:
-            # Проверяем существование вебинара
-            result = await db.execute(
-                select(models.Webinar).where(
-                    models.Webinar.id == webinar_id,
-                    models.Webinar.status == "scheduled"
-                )
-            )
-            webinar = result.scalar_one_or_none()
+            webinar = await webinar_repository.get_webinar_by_id(db, webinar_id)
 
             if not webinar:
                 return {"success": False, "message": "Вебинар не найден"}
 
-            # Проверяем, не прошел ли уже вебинар
             if webinar.scheduled_at < datetime.now():
                 return {"success": False, "message": "Вебинар уже завершился"}
 
-            # Проверяем свободные места
             if webinar.available_slots <= 0:
                 return {"success": False, "message": "Извините, все места заняты"}
 
-            # Проверяем, не зарегистрирован ли уже пользователь
-            result = await db.execute(
-                select(models.WebinarRegistration).where(
-                    models.WebinarRegistration.webinar_id == webinar_id,
-                    models.WebinarRegistration.user_id == user_id
-                )
-            )
-            existing_registration = result.scalar_one_or_none()
+            existing_registration = await webinar_repository.get_user_registration(db, webinar_id, user_id)
 
             if existing_registration:
                 return {
@@ -109,31 +95,12 @@ class WebinarService:
                     "already_registered": True
                 }
 
-            # ✅ ПРОСТОЕ РЕШЕНИЕ: Регистрация в один клик!
-            registration = models.WebinarRegistration(
-                user_id=user_id,
-                webinar_id=webinar_id
-            )
+            registration = await webinar_repository.create_registration(db, webinar_id, user_id)
 
-            db.add(registration)
-            await db.commit()
-            await db.refresh(registration)
-
-            # Получаем данные пользователя
-            result = await db.execute(
-                select(models.User).where(models.User.id == user_id)
-            )
-            user = result.scalar_one_or_none()
+            user = await user_repository.get_user_by_id(db, user_id)
 
             if user:
-                # ✅ Отправляем простое email подтверждение
-                from src.tasks.tasks import send_webinar_registration_confirmation
-                send_webinar_registration_confirmation.delay(
-                    user.email,
-                    user.username,
-                    webinar.title,
-                    webinar.scheduled_at
-                )
+                await self._send_registration_confirmation(db, user, webinar, registration)
 
                 # ✅ Создаем уведомление на платформе
                 from src.tasks.tasks import create_platform_notification
@@ -158,23 +125,78 @@ class WebinarService:
             logger.error(f"Error registering for webinar: {e}")
             return {"success": False, "message": "Ошибка регистрации"}
 
+    async def _send_registration_confirmation(self, db: AsyncSession, user: models.User, webinar: models.Webinar,
+                                              registration: models.WebinarRegistration):
+        """Отправка подтверждения регистрации через систему уведомлений"""
+        try:
+            from src.services.notification_service import notification_service
+
+            email_content = self._create_registration_email_content(
+                username=user.username,
+                webinar_title=webinar.title,
+                scheduled_at=webinar.scheduled_at,
+                duration=webinar.duration,
+                action_url=f"{settings.PLATFORM_URL}/webinars"
+            )
+
+            await notification_service.create_notification(
+                db=db,
+                user_id=user.id,
+                title="🎉 Вы зарегистрированы на вебинар!",
+                message=email_content,
+                notification_type="webinar_registration_confirmation",
+                related_entity_type="webinar",
+                related_entity_id=webinar.id,
+                action_url=f"{settings.PLATFORM_URL}/webinars",
+                meta_data={
+                    "webinar_title": webinar.title,
+                    "scheduled_at": webinar.scheduled_at.isoformat(),
+                    "registration_id": registration.id,
+                    "duration": webinar.duration,
+                    "room_name": f"webinar_{webinar.id}"
+                }
+            )
+
+            logger.info(f"Registration confirmation notification created for user {user.id}")
+
+        except Exception as e:
+            logger.error(f"Error sending registration confirmation: {e}")
+
+    def _create_registration_email_content(self, username: str, webinar_title: str, scheduled_at: datetime,
+                                           duration: int, action_url: str) -> str:
+        """Создание содержимого для email подтверждения через шаблон"""
+        try:
+            return template_service.render_email_template(
+                "webinar_registration.html",
+                username=username,
+                webinar_title=webinar_title,
+                scheduled_at=scheduled_at.strftime('%d.%m.%Y в %H:%M'),
+                duration=duration,
+                action_url=action_url
+            )
+        except Exception as e:
+            logger.error(f"Error rendering email template: {e}")
+            return f"""
+            <div style="font-family: Arial, sans-serif; padding: 20px;">
+                <h2>Привет, {username}!</h2>
+                <p>Вы успешно зарегистрировались на вебинар:</p>
+                <h3>"{webinar_title}"</h3>
+                <p><strong>Дата и время:</strong> {scheduled_at.strftime('%d.%m.%Y в %H:%M')}</p>
+                <p>Мы рады видеть вас на нашем вебинаре! 🚀</p>
+            </div>
+            """
+
     async def join_webinar(self, db: AsyncSession, webinar_id: int, user_id: int) -> Dict[str, Any]:
         """Присоединение к вебинару"""
         try:
-            # Проверяем регистрацию
-            result = await db.execute(
-                select(models.WebinarRegistration).where(
-                    models.WebinarRegistration.webinar_id == webinar_id,
-                    models.WebinarRegistration.user_id == user_id
-                )
-            )
-            registration = result.scalar_one_or_none()
+            registration = await webinar_repository.get_user_registration(db, webinar_id, user_id)
 
             if not registration:
                 return {"success": False, "message": "Вы не зарегистрированы на этот вебинар"}
 
             webinar = registration.webinar
-            user = registration.user
+
+            user = await user_repository.get_user_by_id(db, user_id)
 
             # Проверяем время вебинара (разрешаем присоединиться за 15 минут до начала)
             time_diff = (webinar.scheduled_at - datetime.now()).total_seconds()
@@ -182,11 +204,13 @@ class WebinarService:
                 return {"success": False, "message": "Вебинар еще не начался"}
 
             # Генерируем токен
-            participant_token = self.generate_participant_token(webinar_id, user_id, user.username)
+            participant_token = self.generate_participant_token(webinar_id, user_id, user.username if user else None)
 
-            # Помечаем как присутствующего
-            registration.attended = True
-            await db.commit()
+            # ✅ ИСПОЛЬЗУЕМ РЕПОЗИТОРИЙ ДЛЯ ОТМЕТКИ ПРИСУТСТВИЯ
+            await webinar_repository.mark_attended(db, webinar_id, user_id)
+
+            # Создаем уведомление о присоединении
+            await self._create_join_notification(db, user_id, webinar)
 
             return {
                 "success": True,
@@ -199,6 +223,28 @@ class WebinarService:
             await db.rollback()
             logger.error(f"Error joining webinar: {e}")
             return {"success": False, "message": "Ошибка присоединения к вебинару"}
+
+    async def _create_join_notification(self, db: AsyncSession, user_id: int, webinar: models.Webinar):
+        """Создание уведомления о присоединении к вебинару"""
+        try:
+            from src.services.notification_service import notification_service
+
+            await notification_service.create_notification(
+                db=db,
+                user_id=user_id,
+                title="🎯 Вы присоединились к вебинару",
+                message=f'Вы успешно присоединились к вебинару "{webinar.title}"',
+                notification_type="webinar_joined",
+                related_entity_type="webinar",
+                related_entity_id=webinar.id,
+                meta_data={
+                    "webinar_title": webinar.title,
+                    "joined_at": datetime.now().isoformat()
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Error creating join notification: {e}")
 
 
 webinar_service = WebinarService()
