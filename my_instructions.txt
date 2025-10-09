@@ -1,5 +1,5 @@
 git add .
-git commit -m "added tests of notifications and webinars endpoints"
+git commit -m "fix conftest and tests of auth"
 git push origin main
 
 git add .
