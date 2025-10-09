@@ -15,11 +15,25 @@ from src.repository.user_repository import user_repository
 
 logger = logging.getLogger(__name__)
 
+try:
+    from livekit.api import AccessToken
+    from livekit.api.access_token import VideoGrants
+    LIVEKIT_AVAILABLE = True
+except ImportError:
+    logger.warning("LiveKit not available, using mock implementation")
+    from src.services.mocks.livekit_mock import AccessToken, VideoGrants
+    LIVEKIT_AVAILABLE = False
 
 class WebinarService:
     def __init__(self):
-        self.api_key = settings.LIVEKIT_API_KEY
-        self.api_secret = settings.LIVEKIT_API_SECRET
+        # ✅ БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ - Решение, так как LiveKit сейчас недоступен
+        if LIVEKIT_AVAILABLE:
+            self.api_key = settings.LIVEKIT_API_KEY
+            self.api_secret = settings.LIVEKIT_API_SECRET
+        else:
+            self.api_key = "mock_api_key"
+            self.api_secret = "mock_api_secret"
+            logger.info("Using mock LiveKit implementation")
 
     def create_webinar_room(self, webinar_id: int, title: str) -> tuple[str, str]:
         """Создание комнаты для вебинара"""

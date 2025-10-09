@@ -1,4 +1,4 @@
-# tests/debug_user.py
+# src/tests/debug_user.py
 import pytest
 
 
