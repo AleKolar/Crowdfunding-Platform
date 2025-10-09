@@ -52,10 +52,13 @@ class Settings:
     # Platform settings
     PLATFORM_URL: str = os.getenv("PLATFORM_URL", "https://localhost:8000")
 
-    # LiveKit (для вебинаров)
-    LIVEKIT_HOST = os.getenv("LIVEKIT_HOST", "localhost")
-    LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
-    LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
+    # LiveKit настройки (опциональные)
+    LIVEKIT_HOST = os.getenv("LIVEKIT_HOST", default="http://localhost:7880")
+    LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", default="mock_api_key")
+    LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", default="mock_api_secret")
+
+    # Флаг для определения, используем ли мы реальный LiveKit
+    USE_REAL_LIVEKIT: bool = bool(os.getenv("USE_REAL_LIVEKIT", "False").lower() in {"1", "true", "yes"})
 
     # Stripe (для платежей)
     STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")

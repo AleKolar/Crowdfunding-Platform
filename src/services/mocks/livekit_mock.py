@@ -2,8 +2,6 @@
 """
 Заглушка для LiveKit в тестовом режиме
 """
-
-
 class AccessToken:
     def __init__(self, api_key=None, api_secret=None):
         self.api_key = api_key

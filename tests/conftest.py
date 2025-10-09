@@ -17,7 +17,19 @@ sys.path.insert(0, project_root)
 
 print(f"🔧 Project root: {project_root}")
 
-# Сначала импортируем основные модули
+# Мокаем LiveKit ДО импорта основного приложения
+import sys
+from unittest.mock import MagicMock
+
+# Создаем мок для livekit
+mock_livekit = MagicMock()
+mock_livekit.api.AccessToken = MagicMock
+mock_livekit.api.access_token.VideoGrants = MagicMock
+
+sys.modules['livekit'] = mock_livekit
+sys.modules['livekit.api'] = mock_livekit.api
+sys.modules['livekit.api.access_token'] = mock_livekit.api.access_token
+
 try:
     from main import app as main_app
     from src.database.postgres import get_db
