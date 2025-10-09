@@ -1,5 +1,5 @@
 # src/database/models/models_webinar.py
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .base import Base
@@ -15,8 +15,10 @@ class Webinar(Base):
     scheduled_at = Column(DateTime, nullable=False)
     duration = Column(Integer, default=60)  # в минутах
     max_participants = Column(Integer, default=100)
+    is_public = Column(Boolean, default=True)
     room_name = Column(String(100))
     status = Column(String(20), default="scheduled")
+    meta_data = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -32,7 +34,22 @@ class Webinar(Base):
     # Вычисляемые свойства
     @property
     def available_slots(self):
-        return self.max_participants - len(self.registrations)
+        """Вычисляет доступные слоты без ленивой загрузки"""
+        # Свойство available_slots не работает при попытки
+        # загрузить связанные регистрации (self.registrations) --> ленивая загрузка
+        # ленивая загрузка - не работает без правильного вызова greenlet_spawn
+        return self.max_participants
+
+    async def get_available_slots(self, session):
+        """Асинхронный метод для получения доступных слотов"""
+        from sqlalchemy import select, func
+        result = await session.execute(
+            select(func.count(WebinarRegistration.id)).where(
+                WebinarRegistration.webinar_id == self.id
+            )
+        )
+        registrations_count = result.scalar()
+        return self.max_participants - registrations_count
 
     @property
     def is_upcoming(self):

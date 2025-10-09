@@ -1,7 +1,5 @@
 # tests/test_webinar_notifications/test_webinar_simple.py
 import pytest
-from datetime import datetime, timedelta
-
 
 class TestWebinarSimple:
 

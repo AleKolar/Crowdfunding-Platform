@@ -16,7 +16,7 @@ class WebinarBase(BaseModel):
 
 # Создание вебинара
 class WebinarCreate(WebinarBase):
-    meta_data: Optional[Dict[str, Any]] = None
+    pass
 
 
 # Обновление вебинара
@@ -27,8 +27,6 @@ class WebinarUpdate(BaseModel):
     duration: Optional[int] = None
     max_participants: Optional[int] = None
     is_public: Optional[bool] = None
-    meta_data: Optional[Dict[str, Any]] = None
-
 
 # Ответ с вебинаром
 class Webinar(WebinarBase):

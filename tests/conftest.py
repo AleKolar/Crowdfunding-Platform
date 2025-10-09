@@ -1,4 +1,5 @@
 # src/tests/conftest.py
+import contextlib
 import os
 import sys
 import asyncio
@@ -19,9 +20,11 @@ sys.path.insert(0, project_root)
 
 print(f"🔧 Project root: {project_root}")
 
+from src.database import models
+
 # Мокаем LiveKit ДО импорта основного приложения
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 # Создаем мок для livekit
 mock_livekit = MagicMock()
@@ -39,6 +42,16 @@ try:
     from src.endpoints.auth import auth_router
     from src.endpoints.payments import payments_router
     from src.endpoints.projects import projects_router
+
+    # ✅ ДОБАВЛЯЕМ WEBINAR ROUTER
+    try:
+        from src.endpoints.webinars import webinar_router
+
+        WEBINAR_AVAILABLE = True
+        print("✅ Webinar router импортирован")
+    except ImportError as e:
+        WEBINAR_AVAILABLE = False
+        print(f"⚠️ Webinar router не найден: {e}")
 
     # ✅ ДОБАВЛЯЕМ ИМПОРТЫ НОВЫХ РОУТЕРОВ (если они существуют)
     try:
@@ -81,8 +94,6 @@ def mock_verify_password(plain_password, hashed_password):
         return plain_password == expected_password
     return False
 
-
-# Применяем моки к модулю аутентификации
 try:
     import src.security.auth as auth_module
 
@@ -123,6 +134,13 @@ def create_test_app():
     test_app.include_router(payments_router)
     test_app.include_router(projects_router)
 
+    # ✅ ДОБАВЛЯЕМ WEBINAR ROUTER
+    if WEBINAR_AVAILABLE:
+        test_app.include_router(webinar_router)
+        print("✅ Webinar router добавлен в тестовое приложение")
+    else:
+        print("⚠️ Webinar router не добавлен (недоступен)")
+
     # ✅ ДОБАВЛЯЕМ НОВЫЕ РОУТЕРЫ (если они доступны)
     if COMMENTS_AVAILABLE:
         test_app.include_router(comments_router)
@@ -139,6 +157,47 @@ def create_test_app():
 
     return test_app
 
+
+# @pytest.fixture(scope="function")
+# async def db_session() -> AsyncGenerator[AsyncSession, None]:
+#     """Фикстура для доступа к асинхронной тестовой сессии БД"""
+#     # Создаем таблицы перед каждым тестом
+#     async with engine.begin() as conn:
+#         await conn.run_sync(Base.metadata.drop_all)  # Сначала очищаем
+#         await conn.run_sync(Base.metadata.create_all)  # Затем создаем
+#         print("✅ Таблицы созданы в тестовой БД")
+#
+#     async with TestingAsyncSessionLocal() as session:
+#         try:
+#             yield session
+#         finally:
+#             await session.close()
+#     # Очищаем таблицы после теста
+#     async with engine.begin() as conn:
+#         await conn.run_sync(Base.metadata.drop_all)
+#         print("✅ Таблицы очищены после теста")
+
+
+@pytest.fixture(autouse=True)
+async def ensure_tables_created():
+    """Единственная фикстура для управления таблицами"""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    print("🔄 Таблицы созданы")
+    yield
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    print("🧹 Таблицы очищены")
+
+@pytest.fixture(scope="function")
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Фикстура для сессии БД (без управления таблицами)"""
+    async with TestingAsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
 
 @pytest.fixture
 def current_user_mock():
@@ -174,24 +233,6 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
-
-
-@pytest.fixture(scope="function")
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Фикстура для доступа к асинхронной тестовой сессии БД"""
-    # Создаем таблицы перед каждым тестом
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    async with TestingAsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
-
-    # Очищаем таблицы после теста
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
 
 @pytest.fixture(scope="function")
@@ -232,12 +273,8 @@ async def client() -> TestClient:
     # Очищаем переопределения
     test_app.dependency_overrides.clear()
 
-    # Очищаем таблицы
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
-
-# ✅ ДОБАВЛЕНЫ ФИКСТУРЫ ДЛЯ ТЕСТОВ
+# ✅ ФИКСТУРЫ ДЛЯ ТЕСТОВ
 
 @pytest.fixture
 async def test_user(db_session: AsyncSession):
@@ -321,7 +358,6 @@ async def test_webinar(db_session: AsyncSession, test_user):
         max_participants=100,
         creator_id=test_user.id,
         status="scheduled"
-        # is_public не нужно - его нет в модели
     )
 
     db_session.add(webinar)
@@ -368,6 +404,28 @@ async def test_webinar_registration(db_session: AsyncSession, test_webinar, test
     await db_session.refresh(registration)
 
     return registration
+
+@pytest.fixture(autouse=True)
+def mock_redis():
+    """Мокаем Redis для всех тестов - универсальная версия"""
+
+    mock_redis_instance = MagicMock()
+    mock_redis_instance.get.return_value = None
+    mock_redis_instance.set.return_value = True
+    mock_redis_instance.delete.return_value = True
+    mock_redis_instance.keys.return_value = []
+    mock_redis_instance.sadd.return_value = True
+    mock_redis_instance.smembers.return_value = set()
+    mock_redis_instance.hgetall.return_value = {}
+    mock_redis_instance.hset.return_value = True
+    mock_redis_instance.exists.return_value = False
+    mock_redis_instance.expire.return_value = True
+    mock_redis_instance.ping.return_value = True
+
+    # Патчим все возможные места
+    with patch('src.services.notification_service.redis.Redis', return_value=mock_redis_instance), \
+         patch('src.services.notification_service.notification_service.redis_client', mock_redis_instance):
+        yield mock_redis_instance
 
 @pytest.fixture
 def authenticated_headers():

@@ -1,3 +1,4 @@
+# src/endpoints/webinars.py
 from datetime import datetime, timedelta
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -282,9 +283,7 @@ async def create_webinar(
         duration=webinar_data.duration,
         max_participants=webinar_data.max_participants,
         is_public=webinar_data.is_public,
-        meta_data=webinar_data.meta_data
     )
-
 
 @webinar_router.put(
     "/{webinar_id}",

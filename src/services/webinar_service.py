@@ -1,3 +1,5 @@
+# src/services/webinar_service.py
+from src.services.notification_service import notification_service
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
@@ -99,6 +101,7 @@ class WebinarService:
             max_participants: int = 100,
             is_public: bool = True,
             meta_data: Optional[Dict[str, Any]] = None
+
     ) -> models.Webinar:
         """Создание вебинара с проверкой прав"""
         try:
@@ -190,7 +193,8 @@ class WebinarService:
                 'description': webinar.description,
                 'scheduled_at': webinar.scheduled_at.isoformat(),
                 'duration': webinar.duration,
-                'max_participants': webinar.max_participants
+                'max_participants': webinar.max_participants,
+                'creator_id': webinar.creator_id
             }
 
             # Удаляем старый анонс и создаем новый

@@ -1,8 +1,8 @@
 """new migration
 
-Revision ID: c8405a0d4646
+Revision ID: 9513bbb8749b
 Revises: 
-Create Date: 2025-10-09 03:38:51.407762
+Create Date: 2025-10-09 18:15:54.084179
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'c8405a0d4646'
+revision: str = '9513bbb8749b'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -309,10 +309,14 @@ def upgrade() -> None:
     sa.Column('scheduled_at', sa.DateTime(), nullable=False),
     sa.Column('duration', sa.Integer(), nullable=True),
     sa.Column('max_participants', sa.Integer(), nullable=True),
+    sa.Column('is_public', sa.Boolean(), nullable=True),
     sa.Column('room_name', sa.String(length=100), nullable=True),
     sa.Column('status', sa.String(length=20), nullable=True),
+    sa.Column('meta_data', sa.JSON(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('updated_at', sa.DateTime(), nullable=True),
+    sa.Column('creator_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['creator_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
