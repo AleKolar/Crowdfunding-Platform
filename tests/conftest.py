@@ -2,6 +2,8 @@
 import os
 import sys
 import asyncio
+from datetime import datetime, timedelta
+
 import pytest
 import uuid
 from typing import AsyncGenerator
@@ -241,11 +243,14 @@ async def client() -> TestClient:
 async def test_user(db_session: AsyncSession):
     """Создает тестового пользователя для репозиториев"""
     from src.database.models import User
+    import uuid
+
+    unique_id = uuid.uuid4().hex[:8]
 
     user = User(
-        email="repo_test@example.com",
-        phone="+79998887766",
-        username="repotestuser",
+        email=f"repo_test_{unique_id}@example.com",
+        phone=f"+7999{unique_id}",
+        username=f"repotestuser_{unique_id}",
         secret_code="5678",
         hashed_password="mock_hash_TestPass123!",
         is_active=True
@@ -304,11 +309,71 @@ async def test_post(db_session: AsyncSession, test_user, test_project):
 
 
 @pytest.fixture
+async def test_webinar(db_session: AsyncSession, test_user):
+    """Создает тестовый вебинар"""
+    from src.database import models
+
+    webinar = models.Webinar(
+        title="Test Webinar",
+        description="Test Description",
+        scheduled_at=datetime.now() + timedelta(days=1),
+        duration=60,
+        max_participants=100,
+        creator_id=test_user.id,
+        status="scheduled"
+        # is_public не нужно - его нет в модели
+    )
+
+    db_session.add(webinar)
+    await db_session.commit()
+    await db_session.refresh(webinar)
+
+    return webinar
+
+
+@pytest.fixture
+async def test_started_webinar(db_session: AsyncSession, test_user):
+    """Создает тестовый вебинар который уже начался"""
+    from src.database import models
+
+    webinar = models.Webinar(
+        title="Started Webinar",
+        description="Test Description",
+        scheduled_at=datetime.now() - timedelta(minutes=10),  # начался 10 минут назад
+        duration=60,
+        max_participants=100,
+        creator_id=test_user.id,
+        status="scheduled"
+    )
+
+    db_session.add(webinar)
+    await db_session.commit()
+    await db_session.refresh(webinar)
+
+    return webinar
+
+
+@pytest.fixture
+async def test_webinar_registration(db_session: AsyncSession, test_webinar, test_user):
+    """Создает тестовую регистрацию на вебинар"""
+    from src.database import models
+
+    registration = models.WebinarRegistration(
+        webinar_id=test_webinar.id,
+        user_id=test_user.id
+    )
+
+    db_session.add(registration)
+    await db_session.commit()
+    await db_session.refresh(registration)
+
+    return registration
+
+@pytest.fixture
 def authenticated_headers():
     """✅ ФИКСТУРА ДЛЯ АУТЕНТИФИЦИРОВАННЫХ ЗАПРОСОВ"""
     return {
         "Content-Type": "application/json",
-        #!!! Пока используем мок аутентификации, позже можно добавить реальный токен
     }
 
 
