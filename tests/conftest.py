@@ -1,5 +1,4 @@
 # src/tests/conftest.py
-import contextlib
 import os
 import sys
 import asyncio
@@ -23,7 +22,6 @@ print(f"🔧 Project root: {project_root}")
 from src.database import models
 
 # Мокаем LiveKit ДО импорта основного приложения
-import sys
 from unittest.mock import MagicMock, patch
 
 # Создаем мок для livekit
@@ -53,7 +51,7 @@ try:
         WEBINAR_AVAILABLE = False
         print(f"⚠️ Webinar router не найден: {e}")
 
-    # ✅ ДОБАВЛЯЕМ ИМПОРТЫ НОВЫХ РОУТЕРОВ (если они существуют)
+    # ✅ ДОБАВЛЯЕМ ИМПОРТЫ НОВЫХ РОУТЕРОВ
     try:
         from src.endpoints.comments import comments_router
 
@@ -80,29 +78,6 @@ except ImportError as e:
     print(f"❌ Ошибка импорта: {e}")
     raise
 
-
-# Моки для функций хеширования паролей
-def mock_get_password_hash(password):
-    """Мок для хеширования пароля - обходит bcrypt ограничения"""
-    return f"mock_hash_{password}"
-
-
-def mock_verify_password(plain_password, hashed_password):
-    """Мок проверки пароля"""
-    if hashed_password.startswith("mock_hash_"):
-        expected_password = hashed_password.replace("mock_hash_", "")
-        return plain_password == expected_password
-    return False
-
-try:
-    import src.security.auth as auth_module
-
-    auth_module.get_password_hash = mock_get_password_hash
-    auth_module.verify_password = mock_verify_password
-    print("✅ Моки применены к auth модулю")
-except Exception as e:
-    print(f"⚠️ Не удалось применить моки к auth модулю: {e}")
-
 # Асинхронная тестовая БД (SQLite)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -110,7 +85,7 @@ engine = create_async_engine(
     TEST_DATABASE_URL,
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
-    echo=False  # Убрали echo для чистоты вывода
+    echo=False
 )
 
 TestingAsyncSessionLocal = async_sessionmaker(
@@ -134,14 +109,10 @@ def create_test_app():
     test_app.include_router(payments_router)
     test_app.include_router(projects_router)
 
-    # ✅ ДОБАВЛЯЕМ WEBINAR ROUTER
     if WEBINAR_AVAILABLE:
         test_app.include_router(webinar_router)
         print("✅ Webinar router добавлен в тестовое приложение")
-    else:
-        print("⚠️ Webinar router не добавлен (недоступен)")
 
-    # ✅ ДОБАВЛЯЕМ НОВЫЕ РОУТЕРЫ (если они доступны)
     if COMMENTS_AVAILABLE:
         test_app.include_router(comments_router)
         print("✅ Comments router добавлен в тестовое приложение")
@@ -158,24 +129,48 @@ def create_test_app():
     return test_app
 
 
-# @pytest.fixture(scope="function")
-# async def db_session() -> AsyncGenerator[AsyncSession, None]:
-#     """Фикстура для доступа к асинхронной тестовой сессии БД"""
-#     # Создаем таблицы перед каждым тестом
-#     async with engine.begin() as conn:
-#         await conn.run_sync(Base.metadata.drop_all)  # Сначала очищаем
-#         await conn.run_sync(Base.metadata.create_all)  # Затем создаем
-#         print("✅ Таблицы созданы в тестовой БД")
-#
-#     async with TestingAsyncSessionLocal() as session:
-#         try:
-#             yield session
-#         finally:
-#             await session.close()
-#     # Очищаем таблицы после теста
-#     async with engine.begin() as conn:
-#         await conn.run_sync(Base.metadata.drop_all)
-#         print("✅ Таблицы очищены после теста")
+# 🔧 ГЛОБАЛЬНЫЙ МОК ДЛЯ CELERY - РЕШАЕТ ПРОБЛЕМУ С REDIS
+@pytest.fixture(autouse=True)
+def mock_celery_tasks():
+    """Глобальный мок для Celery задач во всех тестах"""
+    with patch('src.tasks.tasks.send_welcome_email.delay') as mock_welcome_email:
+        # Настраиваем мок
+        mock_welcome_email.return_value = None
+        yield
+
+
+# 🔧 ГЛОБАЛЬНЫЙ МОК ДЛЯ BCRYPT
+@pytest.fixture(autouse=True)
+def mock_bcrypt_globally():
+    """Глобальный мок для bcrypt во всех тестах"""
+    with patch('src.security.auth.pwd_context.hash') as mock_hash, \
+            patch('src.security.auth.pwd_context.verify') as mock_verify:
+        # Настраиваем моки
+        mock_hash.return_value = "mock_hashed_password_12345"
+        mock_verify.return_value = True
+
+        yield
+
+
+# Моки для функций хеширования паролей
+def mock_get_password_hash(password):
+    """Мок для хеширования пароля"""
+    return "mock_hashed_password_12345"
+
+
+def mock_verify_password(plain_password, hashed_password):
+    """Мок проверки пароля"""
+    return True
+
+
+try:
+    import src.security.auth as auth_module
+
+    auth_module.get_password_hash = mock_get_password_hash
+    auth_module.verify_password = mock_verify_password
+    print("✅ Моки применены к auth модулю")
+except Exception as e:
+    print(f"⚠️ Не удалось применить моки к auth модулю: {e}")
 
 
 @pytest.fixture(autouse=True)
@@ -190,14 +185,16 @@ async def ensure_tables_created():
         await conn.run_sync(Base.metadata.drop_all)
     print("🧹 Таблицы очищены")
 
+
 @pytest.fixture(scope="function")
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Фикстура для сессии БД (без управления таблицами)"""
+    """Фикстура для сессии БД"""
     async with TestingAsyncSessionLocal() as session:
         try:
             yield session
         finally:
             await session.close()
+
 
 @pytest.fixture
 def current_user_mock():
@@ -238,9 +235,6 @@ def event_loop():
 @pytest.fixture(scope="function")
 async def client() -> TestClient:
     """Test client с асинхронной тестовой БД"""
-    # Создаем таблицы
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
 
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         async with TestingAsyncSessionLocal() as session:
@@ -250,15 +244,15 @@ async def client() -> TestClient:
                 await session.close()
 
     async def override_get_current_user():
-        # Возвращаем нового мока для каждого теста
-        mock_user = type('MockUser', (), {
-            'id': 1,
-            'email': 'test@example.com',
-            'username': 'testuser',
-            'is_active': True,
-            'phone': '+79991234567'
-        })()
-        return mock_user
+        class MockUser:
+            def __init__(self):
+                self.id = 1
+                self.email = 'test@example.com'
+                self.username = 'testuser'
+                self.is_active = True
+                self.phone = '+79991234567'
+
+        return MockUser()
 
     # Создаем тестовое приложение
     test_app = create_test_app()
@@ -275,12 +269,10 @@ async def client() -> TestClient:
 
 
 # ✅ ФИКСТУРЫ ДЛЯ ТЕСТОВ
-
 @pytest.fixture
 async def test_user(db_session: AsyncSession):
     """Создает тестового пользователя для репозиториев"""
     from src.database.models import User
-    import uuid
 
     unique_id = uuid.uuid4().hex[:8]
 
@@ -289,7 +281,7 @@ async def test_user(db_session: AsyncSession):
         phone=f"+7999{unique_id}",
         username=f"repotestuser_{unique_id}",
         secret_code="5678",
-        hashed_password="mock_hash_TestPass123!",
+        hashed_password="mock_hashed_password_12345",
         is_active=True
     )
 
@@ -315,7 +307,6 @@ async def test_project(db_session: AsyncSession, test_user):
         tags=["test", "technology"],
         status=ProjectStatus.DRAFT,
         creator_id=test_user.id,
-
     )
 
     db_session.add(project)
@@ -335,7 +326,6 @@ async def test_post(db_session: AsyncSession, test_user, test_project):
         author_id=test_user.id,
         project_id=test_project.id,
         post_type=PostType.UPDATE,
-
     )
 
     db_session.add(post)
@@ -375,7 +365,7 @@ async def test_started_webinar(db_session: AsyncSession, test_user):
     webinar = models.Webinar(
         title="Started Webinar",
         description="Test Description",
-        scheduled_at=datetime.now() - timedelta(minutes=10),  # начался 10 минут назад
+        scheduled_at=datetime.now() - timedelta(minutes=10),
         duration=60,
         max_participants=100,
         creator_id=test_user.id,
@@ -405,10 +395,10 @@ async def test_webinar_registration(db_session: AsyncSession, test_webinar, test
 
     return registration
 
+
 @pytest.fixture(autouse=True)
 def mock_redis():
-    """Мокаем Redis для всех тестов - универсальная версия"""
-
+    """Мокаем Redis для всех тестов"""
     mock_redis_instance = MagicMock()
     mock_redis_instance.get.return_value = None
     mock_redis_instance.set.return_value = True
@@ -422,14 +412,14 @@ def mock_redis():
     mock_redis_instance.expire.return_value = True
     mock_redis_instance.ping.return_value = True
 
-    # Патчим все возможные места
     with patch('src.services.notification_service.redis.Redis', return_value=mock_redis_instance), \
-         patch('src.services.notification_service.notification_service.redis_client', mock_redis_instance):
+            patch('src.services.notification_service.notification_service.redis_client', mock_redis_instance):
         yield mock_redis_instance
+
 
 @pytest.fixture
 def authenticated_headers():
-    """✅ ФИКСТУРА ДЛЯ АУТЕНТИФИЦИРОВАННЫХ ЗАПРОСОВ"""
+    """Фикстура для аутентифицированных запросов"""
     return {
         "Content-Type": "application/json",
     }
