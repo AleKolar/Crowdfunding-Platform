@@ -1,0 +1,28 @@
+<!-- src/templates/emails/notification.html -->
+{% extends "emails/base.html" %}
+
+{% block title %}{{ notification_title }}{% endblock %}
+
+{% block header %}
+<div class="logo">
+    <h1>📢 Уведомление</h1>
+    <p>Важная информация от CrowdPlatform</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="content-card">
+    <h2>Привет, {{ username }}!</h2>
+
+    <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #2c3e50;">{{ notification_title }}</h3>
+        <p style="margin-bottom: 0; color: #2c3e50;">{{ notification_message }}</p>
+    </div>
+
+    {% if action_url %}
+    <div style="text-align: center; margin-top: 25px;">
+        <a href="{{ action_url }}" class="btn-primary">Перейти к действию</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

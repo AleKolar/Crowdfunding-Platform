@@ -2,13 +2,15 @@
 from celery import Celery
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime
-
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta
+import logging
 
 from src.config.settings import settings
 from src.database import models
+from src.services.email_service import email_service
+from src.services.template_service import template_service
+
+logger = logging.getLogger(__name__)
 
 celery = Celery('crowdfunding')
 celery.conf.broker_url = settings.CELERY_BROKER_URL
@@ -23,91 +25,151 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def send_welcome_email(user_email: str, username: str):
     """Приветственное письмо новому пользователю"""
     try:
-        # Здесь интеграция с email сервисом (SendGrid, Mailgun, etc.)
-        message = MIMEMultipart("alternative")
-        message["Subject"] = "Добро пожаловать в CrowdPlatform!"
-        message["From"] = settings.SMTP_FROM_EMAIL
-        message["To"] = user_email
+        subject = "🎉 Добро пожаловать в CrowdPlatform!"
 
-        html = f"""
-        <h1>Добро пожаловать, {username}!</h1>
-        <p>Спасибо за регистрацию на нашей краудфандинговой платформе.</p>
-        <p>Теперь вы можете:</p>
-        <ul>
-            <li>Создавать свои проекты</li>
-            <li>Участвовать в вебинарах</li>
-            <li>Поддерживать интересные идеи</li>
-        </ul>
-        """
+        html_content = template_service.render_email_template(
+            "welcome.html",
+            username=username,
+            platform_url=settings.PLATFORM_URL
+        )
 
-        message.attach(MIMEText(html, "html"))
-
-        # В development просто логируем
-        print(f"📧 Welcome email to {user_email}: {html}")
-
-        # В production:
-        # with smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT) as server:
-        #     server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
-        #     server.send_message(message)
+        if settings.ENVIRONMENT == "production":
+            success = email_service.send_email(user_email, subject, html_content)
+            if not success:
+                logger.error(f"Failed to send welcome email to {user_email}")
+        else:
+            logger.info(f"📧 Welcome email prepared for {user_email}")
 
     except Exception as e:
-        print(f"Error sending welcome email: {e}")
+        logger.error(f"Error sending welcome email: {e}")
 
 
 @celery.task
-def notify_webinar_registrants(webinar_id: int):
-    """Уведомление зарегистрированных на вебинар"""
+def send_webinar_reminders():
+    """Отправка напоминаний о вебинарах"""
     db = SessionLocal()
     try:
-        webinar = db.scalar(
-            select(models.Webinar)
-            .where(models.Webinar.id == webinar_id)
-        )
+        # Вебинары, которые начнутся через 1 час
+        one_hour_from_now = datetime.now() + timedelta(hours=1)
+        time_range_start = one_hour_from_now - timedelta(minutes=5)
+        time_range_end = one_hour_from_now + timedelta(minutes=5)
 
-        if not webinar:
-            return
-
-        registrations = db.scalars(
-            select(models.WebinarRegistration)
-            .where(models.WebinarRegistration.webinar_id == webinar_id)
+        webinars = db.scalars(
+            select(models.Webinar).where(
+                models.Webinar.scheduled_at.between(time_range_start, time_range_end),
+                models.Webinar.status == "scheduled"
+            )
         ).all()
 
-        for registration in registrations:
-            # Внутриплатформенное уведомление
-            notification = models.Notification(
-                user_id=registration.user_id,
-                title="Напоминание о вебинаре",
-                message=f"Вебинар '{webinar.title}' начинается через 1 час",
-                notification_type="webinar_reminder",
-                related_entity_type="webinar",
-                related_entity_id=webinar_id
-            )
-            db.add(notification)
+        for webinar in webinars:
+            # Находим регистрации без отправленных напоминаний
+            registrations = db.scalars(
+                select(models.WebinarRegistration).where(
+                    models.WebinarRegistration.webinar_id == webinar.id,
+                    models.WebinarRegistration.reminder_sent == False
+                )
+            ).all()
 
-            # Email уведомление (если включено)
-            user_settings = db.scalar(
-                select(models.UserSettings)
-                .where(models.UserSettings.user_id == registration.user_id)
-            )
-
-            if user_settings and user_settings.email_notifications:
+            for registration in registrations:
+                # Отправляем email напоминание
                 send_webinar_reminder_email.delay(
                     registration.user.email,
+                    registration.user.username,
                     webinar.title,
-                    webinar.scheduled_at
+                    webinar.scheduled_at,
+                    webinar.id
                 )
 
-        db.commit()
+                # Создаем платформенное уведомление
+                notification = models.Notification(
+                    user_id=registration.user_id,
+                    title="🔔 Вебинар скоро начнется",
+                    message=f"Вебинар '{webinar.title}' начинается через 1 час",
+                    notification_type="webinar_reminder"
+                )
+                db.add(notification)
 
+                # Помечаем как отправленное
+                registration.reminder_sent = True
+
+            db.commit()
+
+    except Exception as e:
+        logger.error(f"Error sending webinar reminders: {e}")
+        db.rollback()
     finally:
         db.close()
 
 
 @celery.task
-def send_webinar_reminder_email(user_email: str, webinar_title: str, scheduled_at: datetime):
+def send_webinar_reminder_email(user_email: str, username: str, webinar_title: str, scheduled_at: datetime, webinar_id: int):
     """Email напоминание о вебинаре"""
-    # Аналогично send_welcome_email
-    print(f"📧 Webinar reminder to {user_email}: {webinar_title} at {scheduled_at}")
+    try:
+        subject = f"🔔 Напоминание: вебинар '{webinar_title}'"
+
+        html_content = template_service.render_email_template(
+            "webinar_reminder.html",
+            username=username,
+            webinar_title=webinar_title,
+            scheduled_at=scheduled_at.strftime("%d.%m.%Y в %H:%M"),
+            webinar_url=f"{settings.PLATFORM_URL}/webinars/{webinar_id}/join"
+        )
+
+        if settings.ENVIRONMENT == "production":
+            email_service.send_email(user_email, subject, html_content)
+        else:
+            logger.info(f"📧 Webinar reminder prepared for {user_email}")
+
+    except Exception as e:
+        logger.error(f"Error sending webinar reminder: {e}")
+
+
+@celery.task
+def send_webinar_registration_confirmation(user_email: str, username: str, webinar_title: str, scheduled_at: datetime):
+    """Простое письмо подтверждения регистрации"""
+    try:
+        subject = f"🎉 Вы зарегистрированы на вебинар: {webinar_title}"
+
+        html_content = f"""
+        <h2>Привет, {username}!</h2>
+        <p>Вы успешно зарегистрировались на вебинар:</p>
+        <h3>"{webinar_title}"</h3>
+        <p><strong>🗓️ Дата и время:</strong> {scheduled_at.strftime('%d.%m.%Y в %H:%M')}</p>
+        <p>Мы напомним вам за 1 час до начала.</p>
+        <p>--<br>Команда CrowdPlatform</p>
+        """
+
+        if settings.ENVIRONMENT == "production":
+            email_service.send_email(user_email, subject, html_content)
+        else:
+            logger.info(f"📧 Simple registration email for {user_email}")
+
+    except Exception as e:
+        logger.error(f"Error sending registration email: {e}")
+
+
+@celery.task
+def create_platform_notification(user_id: int, title: str, message: str, notification_type: str):
+    """Создание уведомления на платформе"""
+    db = SessionLocal()
+    try:
+        notification = models.Notification(
+            user_id=user_id,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            is_read=False
+        )
+
+        db.add(notification)
+        db.commit()
+        logger.info(f"Platform notification created for user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error creating platform notification: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 
 @celery.task
@@ -116,34 +178,28 @@ def notify_followers_new_post(creator_id: int, post_id: int):
     db = SessionLocal()
     try:
         subscriptions = db.scalars(
-            select(models.Subscription)
-            .where(models.Subscription.creator_id == creator_id)
+            select(models.Subscription).where(models.Subscription.creator_id == creator_id)
         ).all()
 
-        post = db.scalar(
-            select(models.Post).where(models.Post.id == post_id)
-        )
+        post = db.scalar(select(models.Post).where(models.Post.id == post_id))
+
+        if not post:
+            return
 
         for subscription in subscriptions:
             notification = models.Notification(
                 user_id=subscription.subscriber_id,
                 title="Новый пост от автора",
                 message=f"Автор опубликовал новый контент",
-                notification_type="new_post",
-                related_entity_type="post",
-                related_entity_id=post_id
+                notification_type="new_post"
             )
             db.add(notification)
 
-            # WebSocket уведомление в реальном времени
-            send_websocket_notification.delay(
-                subscription.subscriber_id,
-                "new_post",
-                {"post_id": post_id, "creator_id": creator_id}
-            )
-
         db.commit()
 
+    except Exception as e:
+        logger.error(f"Error notifying followers: {e}")
+        db.rollback()
     finally:
         db.close()
 
@@ -151,30 +207,16 @@ def notify_followers_new_post(creator_id: int, post_id: int):
 @celery.task
 def send_websocket_notification(user_id: int, notification_type: str, data: dict):
     """Отправка уведомления через WebSocket"""
-    import redis
-    import json
-
-    r = redis.Redis(host='redis', port=6379, db=0)
-
-    message = {
-        'user_id': user_id,
-        'type': notification_type,
-        'data': data,
-        'timestamp': datetime.now().isoformat()
-    }
-
-    r.publish(f'user_{user_id}', json.dumps(message))
-
-
-@celery.task
-def send_websocket_notification(user_id: int, notification_type: str, data: dict):
-    """Отправка уведомления через WebSocket"""
-    import redis
-    import json
-    from datetime import datetime
-
     try:
-        r = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
+        import redis
+        import json
+
+        r = redis.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            db=settings.REDIS_DB,
+            decode_responses=True
+        )
 
         message = {
             'user_id': user_id,
@@ -183,11 +225,8 @@ def send_websocket_notification(user_id: int, notification_type: str, data: dict
             'timestamp': datetime.now().isoformat()
         }
 
-        # Публикуем в Redis канал
         r.publish(f'user_{user_id}', json.dumps(message))
-
-        # Логируем отправку
-        print(f"WebSocket notification sent to user {user_id}: {notification_type}")
+        logger.info(f"WebSocket notification sent to user {user_id}: {notification_type}")
 
     except Exception as e:
-        print(f"Error sending WebSocket notification: {e}")
+        logger.error(f"Error sending WebSocket notification: {e}")

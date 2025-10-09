@@ -60,5 +60,8 @@ pytest-cov==4.1.0
 coverage==6.5.0
 aiosqlite==0.21.0
 
+# Templates
+Jinja2==3.1.6
+
 
 

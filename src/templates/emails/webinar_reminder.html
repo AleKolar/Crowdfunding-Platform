@@ -1,0 +1,38 @@
+<!-- src/templates/emails/webinar_reminder.html -->
+{% extends "emails/base.html" %}
+
+{% block title %}Напоминание о вебинаре{% endblock %}
+
+{% block header %}
+<div class="logo">
+    <h1>🔔 Напоминание о вебинаре</h1>
+    <p>Не пропустите важное событие!</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="content-card">
+    <h2>Привет, {{ username }}!</h2>
+    <p>Напоминаем, что через час начинается вебинар:</p>
+    
+    <div style="text-align: center; margin: 30px 0;">
+        <h3 style="color: #667eea; margin-bottom: 10px;">{{ webinar_title }}</h3>
+        <p style="font-size: 16px; color: #666;">
+            🕐 {{ scheduled_at }}
+        </p>
+    </div>
+    
+    <div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0; color: #2c3e50;">
+            <strong>💡 Подготовка к вебинару:</strong><br>
+            • Проверьте подключение к интернету<br>
+            • Заранее войдите в систему<br>
+            • Подготовьте вопросы спикеру
+        </p>
+    </div>
+    
+    <div style="text-align: center; margin-top: 30px;">
+        <a href="{{ webinar_url }}" class="btn-primary">Перейти к вебинару</a>
+    </div>
+</div>
+{% endblock %}

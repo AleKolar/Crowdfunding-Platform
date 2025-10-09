@@ -1,0 +1,39 @@
+<!-- src/templates/emails/base.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CrowdPlatform{% endblock %}</title>
+    <style>
+        {% include '../static/css/email.css' %}
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="email-header">
+            {% block header %}
+            <div class="logo">
+                <h1>🚀 CrowdPlatform</h1>
+            </div>
+            {% endblock %}
+        </div>
+
+        <div class="email-content">
+            {% block content %}{% endblock %}
+        </div>
+
+        <div class="email-footer">
+            {% block footer %}
+            <p>С уважением, команда CrowdPlatform</p>
+            <div class="social-links">
+                <a href="#">Twitter</a> •
+                <a href="#">Facebook</a> •
+                <a href="#">Instagram</a>
+            </div>
+            <p class="copyright">© 2024 CrowdPlatform. Все права защищены.</p>
+            {% endblock %}
+        </div>
+    </div>
+</body>
+</html>

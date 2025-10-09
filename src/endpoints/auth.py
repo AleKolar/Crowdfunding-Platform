@@ -59,6 +59,10 @@ async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(new_user)
 
+    # Отправляем приветственное письмо асинхронно через Celery
+    from src.tasks.tasks import send_welcome_email
+    send_welcome_email.delay(user_data.email, user_data.username)
+
     return {
         "message": "Пользователь зарегистрирован",
         "user_id": new_user.id,

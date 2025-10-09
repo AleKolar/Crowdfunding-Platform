@@ -1,8 +1,8 @@
-"""New migrations
+"""new migration
 
-Revision ID: dafb30ae8873
+Revision ID: c8405a0d4646
 Revises: 
-Create Date: 2025-10-04 04:01:08.042200
+Create Date: 2025-10-09 03:38:51.407762
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'dafb30ae8873'
+revision: str = 'c8405a0d4646'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -303,14 +303,14 @@ def upgrade() -> None:
     op.create_index(op.f('ix_project_updates_id'), 'project_updates', ['id'], unique=False)
     op.create_table('webinars',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('title', sa.String(), nullable=True),
+    sa.Column('title', sa.String(length=200), nullable=True),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('project_id', sa.Integer(), nullable=True),
-    sa.Column('scheduled_at', sa.DateTime(), nullable=True),
+    sa.Column('scheduled_at', sa.DateTime(), nullable=False),
     sa.Column('duration', sa.Integer(), nullable=True),
     sa.Column('max_participants', sa.Integer(), nullable=True),
-    sa.Column('room_id', sa.String(), nullable=True),
-    sa.Column('status', sa.String(), nullable=True),
+    sa.Column('room_name', sa.String(length=100), nullable=True),
+    sa.Column('status', sa.String(length=20), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('updated_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ),
@@ -411,6 +411,7 @@ def upgrade() -> None:
     sa.Column('webinar_id', sa.Integer(), nullable=True),
     sa.Column('registered_at', sa.DateTime(), nullable=True),
     sa.Column('attended', sa.Boolean(), nullable=True),
+    sa.Column('reminder_sent', sa.Boolean(), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['webinar_id'], ['webinars.id'], ),
     sa.PrimaryKeyConstraint('id')

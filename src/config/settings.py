@@ -1,5 +1,7 @@
 # src/config/settings.py
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -30,9 +32,25 @@ class Settings:
     SMS_API_KEY = os.getenv("SMS_API_KEY", "")
     SMS_API_URL = os.getenv("SMS_API_URL", "")
 
+    # Email settings
+    SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.yandex.ru")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "465"))
+    SMTP_USERNAME: str = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "")
+    SMTP_USE_SSL: bool = os.getenv("SMTP_USE_SSL", "true").lower() == "true"
+    SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "false").lower() == "true"
+
     # Celery
     CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/0")
     CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", f"redis://{REDIS_HOST}:{REDIS_PORT}/1")
+
+    # Template settings
+    TEMPLATES_DIR: Path = Path(__file__).parent.parent / "templates"
+    STATIC_DIR: Path = Path(__file__).parent.parent / "static"
+
+    # Platform settings
+    PLATFORM_URL: str = os.getenv("PLATFORM_URL", "https://localhost:8000")
 
     # LiveKit (для вебинаров)
     LIVEKIT_HOST = os.getenv("LIVEKIT_HOST", "localhost")
