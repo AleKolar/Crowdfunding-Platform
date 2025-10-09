@@ -1,8 +1,7 @@
-# src/repository/webinar_repository.py
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from src.database import models
 
@@ -189,6 +188,76 @@ class WebinarRepository:
         """Проверка регистрации пользователя на вебинар"""
         registration = await self.get_user_registration(db, webinar_id, user_id)
         return registration is not None
+
+    # ============ МЕТОДЫ ДЛЯ ВЫЧИСЛЯЕМЫХ ПОЛЕЙ ============
+
+    async def get_webinar_registrations_count(self, db: AsyncSession, webinar_id: int) -> int:
+        """Получение количества регистраций на вебинар"""
+        result = await db.execute(
+            select(func.count(models.WebinarRegistration.id))
+            .where(models.WebinarRegistration.webinar_id == webinar_id)
+        )
+        return result.scalar() or 0
+
+    async def get_webinar_with_computed_fields(
+            self,
+            db: AsyncSession,
+            webinar_id: int,
+            user_id: Optional[int] = None
+    ) -> Optional[Tuple[models.Webinar, dict]]:
+        """Получение вебинара с вычисляемыми полями"""
+        webinar = await self.get_webinar_by_id(db, webinar_id)
+        if not webinar:
+            return None
+
+        computed_fields = await self._compute_webinar_fields(db, webinar, user_id)
+        return webinar, computed_fields
+
+    async def _compute_webinar_fields(
+            self,
+            db: AsyncSession,
+            webinar: models.Webinar,
+            user_id: Optional[int] = None
+    ) -> dict:
+        """Вычисление дополнительных полей для вебинара"""
+        # Количество регистраций
+        registrations_count = await self.get_webinar_registrations_count(db, webinar.id)
+
+        # Доступные слоты
+        available_slots = max(0, webinar.max_participants - registrations_count)
+
+        # Статус upcoming
+        is_upcoming = webinar.scheduled_at > datetime.now() and webinar.status == "scheduled"
+
+        # Проверка регистрации пользователя
+        is_registered = False
+        if user_id:
+            is_registered = await self.check_user_registered(db, webinar.id, user_id)
+
+        return {
+            "available_slots": available_slots,
+            "is_upcoming": is_upcoming,
+            "is_registered": is_registered,
+            "registrations_count": registrations_count,
+            "room_name": f"webinar_{webinar.id}"  # Генерируем room_name
+        }
+
+    async def get_scheduled_webinars_with_computed_fields(
+            self,
+            db: AsyncSession,
+            user_id: Optional[int] = None,
+            skip: int = 0,
+            limit: int = 20
+    ) -> List[Tuple[models.Webinar, dict]]:
+        """Получение списка вебинаров с вычисляемыми полями"""
+        webinars = await self.get_scheduled_webinars(db, skip, limit)
+
+        result = []
+        for webinar in webinars:
+            computed_fields = await self._compute_webinar_fields(db, webinar, user_id)
+            result.append((webinar, computed_fields))
+
+        return result
 
 
 webinar_repository = WebinarRepository()

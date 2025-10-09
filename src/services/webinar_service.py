@@ -1,14 +1,14 @@
-# src/services/webinar_service.py
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any
-
-# from livekit.api import AccessToken
-# from livekit.api.access_token import VideoGrants
+from typing import Dict, Any, Optional
+from fastapi import HTTPException, status
+from sqlalchemy import select
+from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.settings import settings
 from src.database import models
+from src.services.notification_service import notification_service
 from src.services.template_service import template_service
 from src.repository.webinar_repository import webinar_repository
 from src.repository.user_repository import user_repository
@@ -18,15 +18,17 @@ logger = logging.getLogger(__name__)
 try:
     from livekit.api import AccessToken
     from livekit.api.access_token import VideoGrants
+
     LIVEKIT_AVAILABLE = True
 except ImportError:
     logger.warning("LiveKit not available, using mock implementation")
     from src.services.mocks.livekit_mock import AccessToken, VideoGrants
+
     LIVEKIT_AVAILABLE = False
+
 
 class WebinarService:
     def __init__(self):
-        # ✅ БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ - Решение, так как LiveKit сейчас недоступен
         if LIVEKIT_AVAILABLE:
             self.api_key = settings.LIVEKIT_API_KEY
             self.api_secret = settings.LIVEKIT_API_SECRET
@@ -86,8 +88,173 @@ class WebinarService:
 
         return token.to_jwt()
 
+    async def create_webinar(
+            self,
+            db: AsyncSession,
+            creator_id: int,
+            title: str,
+            description: str,
+            scheduled_at: datetime,
+            duration: int = 60,
+            max_participants: int = 100,
+            is_public: bool = True,
+            meta_data: Optional[Dict[str, Any]] = None
+    ) -> models.Webinar:
+        """Создание вебинара с проверкой прав"""
+        try:
+            # Создаем вебинар
+            webinar = models.Webinar(
+                title=title,
+                description=description,
+                scheduled_at=scheduled_at,
+                duration=duration,
+                max_participants=max_participants,
+                creator_id=creator_id,
+                is_public=is_public,
+                meta_data=meta_data or {}
+            )
+
+            db.add(webinar)
+            await db.commit()
+            await db.refresh(webinar)
+
+            # Создаем анонс в Redis
+            announcement_data = {
+                'id': webinar.id,
+                'title': webinar.title,
+                'description': webinar.description,
+                'scheduled_at': webinar.scheduled_at.isoformat(),
+                'duration': webinar.duration,
+                'max_participants': webinar.max_participants,
+                'creator_id': webinar.creator_id
+            }
+
+            notification_service.create_webinar_announcement(announcement_data)
+
+            logger.info(f"Webinar created: {webinar.id} by user {creator_id}")
+            return webinar
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Error creating webinar: {e}")
+            raise
+
+    async def update_webinar(
+            self,
+            db: AsyncSession,
+            webinar_id: int,
+            updater_id: int,
+            update_data: Dict[str, Any]
+    ) -> Optional[models.Webinar]:
+        """Обновление вебинара с проверкой прав"""
+        try:
+            # Получаем вебинар
+            result = await db.execute(
+                select(models.Webinar).where(models.Webinar.id == webinar_id)
+            )
+            webinar = result.scalar_one_or_none()
+
+            if not webinar:
+                return None
+
+            # Проверяем права (только создатель или админ может редактировать)
+            result = await db.execute(
+                select(models.User).where(models.User.id == updater_id)
+            )
+            user = result.scalar_one_or_none()
+
+            can_edit = (
+                    webinar.creator_id == updater_id or
+                    "admin" in getattr(user, 'roles', [])
+            )
+
+            if not can_edit:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not enough permissions to edit this webinar"
+                )
+
+            # Обновляем данные
+            for field, value in update_data.items():
+                if hasattr(webinar, field):
+                    setattr(webinar, field, value)
+
+            webinar.updated_at = datetime.now()
+            await db.commit()
+            await db.refresh(webinar)
+
+            # Обновляем анонс в Redis
+            announcement_data = {
+                'id': webinar.id,
+                'title': webinar.title,
+                'description': webinar.description,
+                'scheduled_at': webinar.scheduled_at.isoformat(),
+                'duration': webinar.duration,
+                'max_participants': webinar.max_participants
+            }
+
+            # Удаляем старый анонс и создаем новый
+            notification_service.redis_client.delete(f"webinar_announcement_{webinar.id}")
+            notification_service.redis_client.srem('active_webinar_announcements', f"webinar_announcement_{webinar.id}")
+
+            notification_service.create_webinar_announcement(announcement_data)
+
+            return webinar
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Error updating webinar: {e}")
+            raise
+
+    async def send_webinar_invitations(
+            self,
+            db: AsyncSession,
+            webinar_id: int,
+            user_ids: List[int]
+    ) -> int:
+        """Отправка приглашений на вебинар"""
+        try:
+            # Получаем вебинар
+            result = await db.execute(
+                select(models.Webinar).where(models.Webinar.id == webinar_id)
+            )
+            webinar = result.scalar_one_or_none()
+
+            if not webinar:
+                return 0
+
+            sent_count = 0
+            for user_id in user_ids:
+                try:
+                    await notification_service.create_notification(
+                        db=db,
+                        user_id=user_id,
+                        title=f"Приглашение на вебинар: {webinar.title}",
+                        message=f"Вы приглашены на вебинар: {webinar.description}",
+                        notification_type="webinar_invite",
+                        related_entity_type="webinar",
+                        related_entity_id=webinar.id,
+                        action_url=f"/webinars/{webinar.id}",
+                        meta_data={
+                            "webinar_id": webinar.id,
+                            "scheduled_at": webinar.scheduled_at.isoformat(),
+                            "duration": webinar.duration
+                        }
+                    )
+                    sent_count += 1
+                except Exception as e:
+                    logger.error(f"Error sending invitation to user {user_id}: {e}")
+                    continue
+
+            logger.info(f"Sent {sent_count} webinar invitations for webinar {webinar_id}")
+            return sent_count
+
+        except Exception as e:
+            logger.error(f"Error sending webinar invitations: {e}")
+            raise
+
     async def register_for_webinar(self, db: AsyncSession, webinar_id: int, user_id: int) -> Dict[str, Any]:
-        """СУПЕР-ПРОСТАЯ регистрация на вебинар - ОДИН КЛИК"""
+        """ПРОСТАЯ регистрация на вебинар в ОДИН КЛИК"""
         try:
             webinar = await webinar_repository.get_webinar_by_id(db, webinar_id)
 
@@ -97,7 +264,9 @@ class WebinarService:
             if webinar.scheduled_at < datetime.now():
                 return {"success": False, "message": "Вебинар уже завершился"}
 
-            if webinar.available_slots <= 0:
+            # Метод для проверки доступных слотов
+            registrations_count = await webinar_repository.get_webinar_registrations_count(db, webinar_id)
+            if registrations_count >= webinar.max_participants:
                 return {"success": False, "message": "Извините, все места заняты"}
 
             existing_registration = await webinar_repository.get_user_registration(db, webinar_id, user_id)
@@ -106,7 +275,9 @@ class WebinarService:
                 return {
                     "success": True,
                     "message": "Вы уже зарегистрированы!",
-                    "already_registered": True
+                    "already_registered": True,
+                    "webinar_id": webinar_id,
+                    "webinar_title": webinar.title
                 }
 
             registration = await webinar_repository.create_registration(db, webinar_id, user_id)
@@ -129,6 +300,7 @@ class WebinarService:
                 "success": True,
                 "message": "🎉 Вы успешно зарегистрированы на вебинар!",
                 "registration_id": registration.id,
+                "webinar_id": webinar_id,
                 "webinar_title": webinar.title,
                 "scheduled_at": webinar.scheduled_at,
                 "already_registered": False
@@ -166,8 +338,7 @@ class WebinarService:
                     "webinar_title": webinar.title,
                     "scheduled_at": webinar.scheduled_at.isoformat(),
                     "registration_id": registration.id,
-                    "duration": webinar.duration,
-                    "room_name": f"webinar_{webinar.id}"
+                    "duration": webinar.duration
                 }
             )
 
@@ -228,8 +399,9 @@ class WebinarService:
 
             return {
                 "success": True,
-                "participant_token": participant_token,
-                "room_name": f"webinar_{webinar_id}",
+                "token": participant_token,
+                "join_url": f"{settings.PLATFORM_URL}/webinars/{webinar_id}/room",
+                "message": "Вы успешно присоединились к вебинару!",
                 "webinar_title": webinar.title
             }
 

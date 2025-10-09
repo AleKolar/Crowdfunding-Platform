@@ -1,6 +1,6 @@
 # src/schemas/user.py
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -10,7 +10,10 @@ class UserBase(BaseModel):
     phone: str
     username: str
     is_active: bool
+    roles: List[str] = []
 
+    class Config:
+        from_attributes = True
 
 class UserCreate(UserBase):
     """Схема создания пользователя"""
