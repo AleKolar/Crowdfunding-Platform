@@ -1,6 +1,7 @@
 # src/schemas/auth.py
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime
+import re
 
 
 class UserRegister(BaseModel):
@@ -21,8 +22,16 @@ class UserRegister(BaseModel):
 
     @field_validator('phone')
     def phone_format(cls, v):
-        if not v.startswith('+'):
-            raise ValueError('Телефон должен начинаться с +')
+        # Убираем все пробелы, дефисы, скобки для проверки
+        clean_phone = re.sub(r'[\s\-\(\)]', '', v)
+
+        if len(clean_phone) != 12:
+            raise ValueError('Телефон должен содержать ровно 12 символов (включая +)')
+
+        # Разрешаем два формата: +79001234567 или 89001234567
+        if not re.match(r'^(\+\d{11}|\d{12})$', clean_phone):
+            raise ValueError('Неверный формат телефона. Пример: +79001234567 или 89001234567')
+
         return v
 
     @field_validator('secret_code')
@@ -45,7 +54,7 @@ class UserLogin(BaseModel):
             raise ValueError('Секретный код должен быть 4 цифры')
         return v
 
-# остальные схемы без изменений...
+
 class Verify2FARequest(BaseModel):
     """Схема верификации 2FA"""
     user_id: int

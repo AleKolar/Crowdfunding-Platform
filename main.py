@@ -1,18 +1,25 @@
 # main.py
+import logging
 from contextlib import asynccontextmanager
 from typing import cast, Any
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
+from pydantic import ValidationError
 from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
 import os
 import time
+
+from starlette import status
+from starlette.responses import JSONResponse
 
 from src.database.postgres import create_tables, engine
 from src.database.redis_client import redis_manager
@@ -24,11 +31,13 @@ from src.endpoints.payments import payments_router
 from src.endpoints.projects import projects_router
 from src.endpoints.websocket import projects_web_router
 
-# Инициализация лимитера для rate limiting
+
+logger = logging.getLogger(__name__)
+
 limiter = Limiter(key_func=get_remote_address)
 
-# Очистка кэша Swagger
-if os.path.exists("./openapi.json"):
+# Очистка кэша Swagger (только для разработки)
+if os.getenv("ENVIRONMENT") == "development" and os.path.exists("./openapi.json"):
     os.remove("./openapi.json")
 
 @asynccontextmanager
@@ -120,43 +129,81 @@ app.add_middleware(
     ] if os.getenv("ENVIRONMENT") == "production" else ["*"],
 )
 
-# Middleware (оставить как есть)
+
+# Middleware для логирования медленных запросов
 @app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    """Middleware для измерения времени выполнения запроса"""
+async def log_slow_requests(request: Request, call_next):
     start_time = time.time()
     response = await call_next(request)
     process_time = time.time() - start_time
-    response.headers["X-Process-Time"] = str(process_time)
 
-    # Логируем медленные запросы
-    if process_time > 1.0:  # больше 1 секунды
-        print(f"⚠️  Медленный запрос: {request.method} {request.url} - {process_time:.3f}s")
-
-    return response
-
-@app.middleware("http")
-async def add_cache_headers(request: Request, call_next):
-    """Middleware для управления кэшированием"""
-    response = await call_next(request)
-
-    # Добавляем заголовки кэширования для статических ресурсов
-    if request.url.path.startswith("/static/"):
-        response.headers["Cache-Control"] = "public, max-age=3600"  # 1 час
+    # Логируем только медленные запросы (> 1 сек)
+    if process_time > 1.0:
+        logger.warning(
+            f"Медленный запрос: {request.method} {request.url} "
+            f"- {process_time:.3f}s"
+        )
 
     return response
 
-# Rate limiting middleware (только для production)
-if os.getenv("ENVIRONMENT") == "production":
-    app.add_middleware(cast(Any, SlowAPIMiddleware))
 
-# ========== СНАЧАЛА HTML СТРАНИЦЫ ==========
+# ========== EXCEPTION HANDLERS ==========
 
-# Статические файлы и шаблоны
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Глобальный обработчик исключений"""
+    logger.error(f"Необработанное исключение: {exc}", exc_info=True)
+
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Internal Server Error",
+            "error_type": type(exc).__name__
+        }
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Обработчик ошибок валидации запросов"""
+    logger.warning(f"Ошибка валидации запроса: {exc}")
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": "Validation Error",
+            "errors": exc.errors()
+        }
+    )
+
+
+@app.exception_handler(ValidationError)
+async def pydantic_validation_handler(request: Request, exc: ValidationError):
+    """Обработчик ошибок валидации Pydantic"""
+    logger.warning(f"Ошибка валидации Pydantic: {exc}")
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": "Data Validation Error",
+            "errors": exc.errors()
+        }
+    )
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """Обработчик превышения лимита запросов"""
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={"detail": "Too many requests"}
+    )
+
+# ========== STATIC FILES & TEMPLATES ==========
+
 app.mount("/static", StaticFiles(directory="src/static"), name="static")
-templates = Jinja2Templates(directory="src/templates")  # ← ТОЛЬКО src/templates
+templates = Jinja2Templates(directory="src/templates")
 
-# HTML страницы - УКАЗЫВАЕМ ПРАВИЛЬНЫЕ ПУТИ
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     """Главная страница - HTML"""

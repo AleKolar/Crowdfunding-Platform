@@ -1,4 +1,5 @@
 # src/security/auth.py
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -13,16 +14,39 @@ from src.database import models
 from src.database.postgres import get_db
 from src.services.sms_service import sms_service
 
-# Используем настройки из config
-pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def verify_password(plain_password, hashed_password):
+    logger.debug(f"Verifying password for user")
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def get_password_hash(password: str) -> str:
+    logger.info(f"Starting password hash process")
+    logger.debug(f"Password length: {len(password)} characters")
+    logger.debug(f"Password bytes length: {len(password.encode('utf-8'))} bytes")
+
+    try:
+        # Проверяем длину в байтах
+        password_bytes = password.encode('utf-8')
+        if len(password_bytes) > 72:
+            logger.warning(f"Password too long: {len(password_bytes)} bytes, truncating to 72 bytes")
+            password_bytes = password_bytes[:72]
+            password = password_bytes.decode('utf-8', errors='ignore')
+            logger.debug(f"Truncated password length: {len(password)} characters")
+
+        logger.debug("Calling pwd_context.hash()")
+        result = pwd_context.hash(password)
+        logger.info("Password hash created successfully")
+        return result
+
+    except Exception as e:
+        logger.error(f"Password hashing failed: {str(e)}")
+        logger.exception("Full exception details:")  # Автоматически добавляет traceback
+        raise
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
