@@ -14,7 +14,7 @@ from src.database.postgres import get_db
 from src.services.sms_service import sms_service
 
 # Используем настройки из config
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
 
 def verify_password(plain_password, hashed_password):

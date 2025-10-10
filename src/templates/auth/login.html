@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Вход - Crowdfunding{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-center">🔐 Вход в систему</h3>
+            </div>
+            <div class="card-body">
+                <form id="loginForm">
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="secret_code" class="form-label">Секретный код</label>
+                        <input type="text" class="form-control" id="secret_code" maxlength="4" pattern="\d{4}" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100">Войти</button>
+                </form>
+                
+                <div class="mt-3 text-center">
+                    <p>Нет аккаунта? <a href="/register">Зарегистрируйтесь</a></p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="loginResult" class="mt-3"></div>
+        
+        <!-- Блок для 2FA -->
+        <div id="twoFactorSection" class="card mt-3" style="display: none;">
+            <div class="card-header">
+                <h5 class="text-center">📱 Двухфакторная аутентификация</h5>
+            </div>
+            <div class="card-body">
+                <p id="smsMessage" class="text-center"></p>
+                <form id="twoFactorForm">
+                    <div class="mb-3">
+                        <label for="sms_code" class="form-label">SMS код</label>
+                        <input type="text" class="form-control" id="sms_code" maxlength="6" pattern="\d{6}" required>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">Подтвердить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentUserId = null;
+
+// Первый этап - вход с email и секретным кодом
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = {
+        email: document.getElementById('email').value,
+        secret_code: document.getElementById('secret_code').value
+    };
+    
+    const resultDiv = document.getElementById('loginResult');
+    
+    try {
+        resultDiv.innerHTML = '<div class="alert alert-info">Входим в систему...</div>';
+        
+        const response = await fetch('/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.requires_2fa) {
+            currentUserId = result.user_id;
+            document.getElementById('smsMessage').textContent = result.message;
+            document.getElementById('twoFactorSection').style.display = 'block';
+            resultDiv.innerHTML = '<div class="alert alert-info">SMS код отправлен на ваш телефон</div>';
+        } else {
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <h5>❌ Ошибка входа</h5>
+                    <p>${result.detail}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <h5>💥 Ошибка сети</h5>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+});
+
+// Второй этап - верификация SMS кода
+document.getElementById('twoFactorForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const smsCode = document.getElementById('sms_code').value;
+    const resultDiv = document.getElementById('loginResult');
+    
+    try {
+        resultDiv.innerHTML = '<div class="alert alert-info">Проверяем SMS код...</div>';
+        
+        const response = await fetch('/auth/verify-2fa', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                user_id: currentUserId,
+                sms_code: smsCode
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            resultDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <h5>🎉 Успешный вход!</h5>
+                    <p><strong>Токен:</strong> ${result.access_token}</p>
+                    <p><strong>Тип:</strong> ${result.token_type}</p>
+                    <p><strong>Истекает через:</strong> ${result.expires_in} секунд</p>
+                    <p class="mt-3">
+                        <a href="/dashboard" class="btn btn-success">Перейти в дашборд</a>
+                    </p>
+                </div>
+            `;
+            
+            // Сохраняем токен в localStorage
+            localStorage.setItem('auth_token', result.access_token);
+            document.getElementById('twoFactorSection').style.display = 'none';
+        } else {
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <h5>❌ Ошибка верификации</h5>
+                    <p>${result.detail}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <h5>💥 Ошибка сети</h5>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+});
+</script>
+{% endblock %}

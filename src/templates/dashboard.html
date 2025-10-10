@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Дашборд - Crowdfunding{% endblock %}
+
+{% block content %}
+<h1>📊 Дашборд пользователя</h1>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>👤 Информация о пользователе</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>ID:</strong> <span id="user-id">-</span></p>
+                <p><strong>Email:</strong> <span id="user-email">-</span></p>
+                <p><strong>Статус:</strong> <span id="user-status" class="badge bg-secondary">Не авторизован</span></p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>🔔 Быстрые действия</h5>
+            </div>
+            <div class="card-body">
+                <button id="test-auth-btn" class="btn btn-primary mb-2 w-100">Тест регистрации</button>
+                <button id="get-projects-btn" class="btn btn-success mb-2 w-100">Получить проекты</button>
+                <button id="get-webinars-btn" class="btn btn-info mb-2 w-100">Получить вебинары</button>
+                <button id="test-protected-btn" class="btn btn-warning mb-2 w-100">Тест защищенного эндпоинта</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>📝 Результаты запросов</h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('api-results').textContent = ''">
+                    Очистить
+                </button>
+            </div>
+            <div class="card-body">
+                <pre id="api-results" class="bg-light p-3" style="min-height: 200px; max-height: 400px; overflow-y: auto; font-size: 0.9rem;">
+Нажмите кнопки выше для тестирования API...
+                </pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Базовые функции для работы с API
+const API_BASE = 'http://localhost:8000';
+
+function logResult(message) {
+    const results = document.getElementById('api-results');
+    results.textContent += `\n${new Date().toLocaleTimeString()}: ${message}`;
+    results.scrollTop = results.scrollHeight;
+}
+
+async function testAuth() {
+    try {
+        logResult('🔐 Тестируем аутентификацию...');
+
+        // Тест регистрации
+        const registerData = {
+            email: `test_${Date.now()}@example.com`,
+            phone: `+7999${Date.now().toString().slice(-7)}`,
+            username: `user_${Date.now().toString().slice(-6)}`,
+            password: "TestPass123!",
+            secret_code: "1234"
+        };
+
+        const registerResponse = await fetch(`${API_BASE}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(registerData)
+        });
+
+        if (registerResponse.ok) {
+            const registerResult = await registerResponse.json();
+            logResult(`✅ Регистрация успешна! User ID: ${registerResult.user_id}`);
+
+            // Обновляем информацию о пользователе
+            document.getElementById('user-id').textContent = registerResult.user_id;
+            document.getElementById('user-email').textContent = registerData.email;
+            document.getElementById('user-status').textContent = 'Зарегистрирован';
+            document.getElementById('user-status').className = 'badge bg-success';
+
+        } else {
+            const error = await registerResponse.json();
+            logResult(`❌ Ошибка регистрации: ${error.detail}`);
+        }
+    } catch (error) {
+        logResult(`💥 Ошибка: ${error.message}`);
+    }
+}
+
+async function getProjects() {
+    try {
+        logResult('📊 Получаем список проектов...');
+
+        const response = await fetch(`${API_BASE}/projects/`);
+
+        if (response.ok) {
+            const projects = await response.json();
+            logResult(`✅ Получено проектов: ${projects.pagination?.total || projects.length}`);
+            logResult(JSON.stringify(projects, null, 2));
+        } else {
+            const error = await response.json();
+            logResult(`❌ Ошибка получения проектов: ${error.detail}`);
+        }
+    } catch (error) {
+        logResult(`💥 Ошибка: ${error.message}`);
+    }
+}
+
+async function getWebinars() {
+    try {
+        logResult('🎥 Получаем список вебинаров...');
+
+        const response = await fetch(`${API_BASE}/webinars/announcements`);
+
+        if (response.ok) {
+            const webinars = await response.json();
+            logResult(`✅ Получено анонсов вебинаров: ${webinars.count}`);
+            logResult(JSON.stringify(webinars, null, 2));
+        } else {
+            const error = await response.json();
+            logResult(`❌ Ошибка получения вебинаров: ${error.detail}`);
+        }
+    } catch (error) {
+        logResult(`💥 Ошибка: ${error.message}`);
+    }
+}
+
+// Инициализация
+document.addEventListener('DOMContentLoaded', function() {
+    logResult('🚀 Дашборд загружен! Используйте кнопки для тестирования API.');
+
+    // Добавляем обработчики для всех кнопок
+    document.getElementById('test-auth-btn').addEventListener('click', testAuth);
+    document.getElementById('get-projects-btn').addEventListener('click', getProjects);
+    document.getElementById('get-webinars-btn').addEventListener('click', getWebinars);
+});
+</script>
+{% endblock %}

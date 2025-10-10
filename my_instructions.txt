@@ -41,7 +41,12 @@ git push origin main
 # 5. **Закоммитить и запушить** - GitHub Actions автоматически запустится!
 #
 
+# myvenv/scripts/activate
+
 # Ручной запуск приложения
 # celery -A src.tasks.celery_app worker --loglevel=info --pool=solo
 # celery -A src.tasks.celery_app beat --loglevel=info
+
+# uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+
 # uvicorn main:app --host 0.0.0.0 --port 8000 --reload

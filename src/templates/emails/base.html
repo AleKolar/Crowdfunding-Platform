@@ -1,4 +1,3 @@
-<!-- src/templates/emails/base.html -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -6,33 +5,206 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}CrowdPlatform{% endblock %}</title>
     <style>
-        {% include '../static/css/email.css' %}
+        /* Базовые стили для email */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f6f9fc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+
+        .logo h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .logo p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .content-card {
+            background: #fff;
+            border-radius: 8px;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin: 25px 0;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .feature-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .feature-text strong {
+            display: block;
+            margin-bottom: 5px;
+            color: #2d3748;
+        }
+
+        .feature-text p {
+            margin: 0;
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .footer-links {
+            margin-bottom: 15px;
+        }
+
+        .footer-links a {
+            color: #667eea;
+            text-decoration: none;
+            margin: 0 10px;
+            font-size: 14px;
+        }
+
+        .footer-text {
+            color: #718096;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .social-links {
+            margin: 15px 0;
+        }
+
+        .social-links a {
+            display: inline-block;
+            margin: 0 8px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 480px) {
+            .content {
+                padding: 20px 15px;
+            }
+
+            .feature-item {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header {
+                padding: 20px 15px;
+            }
+
+            .logo h1 {
+                font-size: 24px;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .feature-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="email-container">
-        <div class="email-header">
+        <!-- Шапка email -->
+        <div class="header">
             {% block header %}
             <div class="logo">
                 <h1>🚀 CrowdPlatform</h1>
+                <p>Платформа для реализации идей</p>
             </div>
             {% endblock %}
         </div>
 
-        <div class="email-content">
-            {% block content %}{% endblock %}
+        <!-- Основное содержимое -->
+        <div class="content">
+            {% block content %}
+            <!-- Содержимое будет переопределено в дочерних шаблонах -->
+            {% endblock %}
         </div>
 
-        <div class="email-footer">
-            {% block footer %}
-            <p>С уважением, команда CrowdPlatform</p>
+        <!-- Подвал email -->
+        <div class="footer">
             <div class="social-links">
-                <a href="#">Twitter</a> •
-                <a href="#">Facebook</a> •
-                <a href="#">Instagram</a>
+                <a href="{{ social_links.twitter|default('#') }}">Twitter</a>
+                <a href="{{ social_links.facebook|default('#') }}">Facebook</a>
+                <a href="{{ social_links.instagram|default('#') }}">Instagram</a>
+                <a href="{{ social_links.linkedin|default('#') }}">LinkedIn</a>
             </div>
-            <p class="copyright">© 2024 CrowdPlatform. Все права защищены.</p>
-            {% endblock %}
+
+            <div class="footer-links">
+                <a href="{{ platform_url|default('#') }}">Наш сайт</a>
+                <a href="{{ support_url|default('#') }}">Поддержка</a>
+                <a href="{{ unsubscribe_url|default('#') }}">Отписаться</a>
+            </div>
+
+            <div class="footer-text">
+                <p>© 2024 CrowdPlatform. Все права защищены.</p>
+                <p>Вы получили это письмо, потому что зарегистрировались на нашей платформе.</p>
+                <p>Если у вас есть вопросы, напишите нам: {{ support_email|default('support@crowdplatform.com') }}</p>
+            </div>
         </div>
     </div>
 </body>

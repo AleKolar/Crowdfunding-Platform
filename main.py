@@ -1,9 +1,13 @@
+# main.py
 from contextlib import asynccontextmanager
 from typing import cast, Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
@@ -39,7 +43,6 @@ async def lifespan(app: FastAPI):
         print("✅ Redis подключен успешно")
     except Exception as e:
         print(f"❌ Ошибка подключения к Redis: {e}")
-        # В зависимости от критичности, можно либо продолжить, либо завершить
         if os.getenv("ENVIRONMENT") == "production":
             raise
 
@@ -93,6 +96,7 @@ app = FastAPI(
     redoc_url=None,  # Отключаем ReDoc, используем только Swagger
 )
 
+# Middleware и CORS
 app.add_middleware(
     cast(Any, CORSMiddleware),
     allow_origins=[
@@ -104,8 +108,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["Authorization", "Content-Type"],
-    # expose_headers=["*"], # какие заголовки exposed to browser
-    # max_age=600,          # кеширование preflight requests (в секундах)
 )
 
 app.add_middleware(
@@ -118,7 +120,7 @@ app.add_middleware(
     ] if os.getenv("ENVIRONMENT") == "production" else ["*"],
 )
 
-# Middleware
+# Middleware (оставить как есть)
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
     """Middleware для измерения времени выполнения запроса"""
@@ -133,7 +135,6 @@ async def add_process_time_header(request: Request, call_next):
 
     return response
 
-
 @app.middleware("http")
 async def add_cache_headers(request: Request, call_next):
     """Middleware для управления кэшированием"""
@@ -145,16 +146,57 @@ async def add_cache_headers(request: Request, call_next):
 
     return response
 
-
 # Rate limiting middleware (только для production)
 if os.getenv("ENVIRONMENT") == "production":
     app.add_middleware(cast(Any, SlowAPIMiddleware))
 
+# ========== СНАЧАЛА HTML СТРАНИЦЫ ==========
 
-# Health
-@app.get("/health", tags=["System"])
+# Статические файлы и шаблоны
+app.mount("/static", StaticFiles(directory="src/static"), name="static")
+templates = Jinja2Templates(directory="src/templates")  # ← ТОЛЬКО src/templates
+
+# HTML страницы - УКАЗЫВАЕМ ПРАВИЛЬНЫЕ ПУТИ
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    """Главная страница - HTML"""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    """Дашборд - HTML"""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    """Страница регистрации - HTML"""
+    return templates.TemplateResponse("auth/register.html", {"request": request})  # ← auth/register.html
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """Страница входа - HTML"""
+    return templates.TemplateResponse("auth/login.html", {"request": request})  # ← auth/login.html
+
+# Дополнительные HTML страницы
+@app.get("/projects-page", response_class=HTMLResponse)
+async def projects_page(request: Request):
+    return templates.TemplateResponse("projects.html", {"request": request})
+
+@app.get("/webinars-page", response_class=HTMLResponse)
+async def webinars_page(request: Request):
+    return templates.TemplateResponse("webinars.html", {"request": request})
+
+@app.get("/comments-page", response_class=HTMLResponse)
+async def comments_page(request: Request):
+    return templates.TemplateResponse("comments.html", {"request": request})
+
+
+# ========== ПОТОМ API ЭНДПОИНТЫ ==========
+
+# API эндпоинты
+@app.get("/api/health", tags=["System"])
 async def health_check(request: Request):
-    """Проверка здоровья системы"""
+    """Проверка здоровья системы - JSON"""
     health_status = {
         "status": "healthy",
         "timestamp": time.time(),
@@ -181,30 +223,27 @@ async def health_check(request: Request):
 
     return health_status
 
-
-@app.get("/", tags=["System"])
-async def root():
-    """Корневой endpoint с информацией о API"""
+@app.get("/api/root", tags=["System"])
+async def api_root():
+    """Корневой API endpoint - JSON"""
     return {
         "message": "Добро пожаловать в Crowdfunding Platform API",
         "version": "1.0.0",
         "docs": "/docs",
-        "health": "/health",
+        "health": "/api/health",
         "environment": os.getenv("ENVIRONMENT", "development")
     }
-
 
 # Пример защищенного endpoint с rate limiting
 @app.get("/api/status", tags=["System"])
 @limiter.limit("10/minute")
 async def api_status(request: Request):
-    """Статус API с ограничением запросов"""
+    """Статус API с ограничением запросов - JSON"""
     return {
         "status": "operational",
         "users_online": await get_online_users_count(),
         "system_load": "normal"
     }
-
 
 async def get_online_users_count():
     """Получение количества онлайн пользователей из Redis"""
@@ -214,6 +253,8 @@ async def get_online_users_count():
         return len(keys)
     except:
         return 0
+
+# ========== ПОДКЛЮЧЕНИЕ РОУТЕРОВ ==========
 
 app.include_router(auth_router)
 app.include_router(payments_router)
@@ -228,7 +269,6 @@ for route in app.routes:
     if hasattr(route, 'path'):
         methods = getattr(route, 'methods', ['?'])
         print(f"  {methods} {route.path}")
-
 
 
 
