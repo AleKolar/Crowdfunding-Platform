@@ -1,4 +1,6 @@
 # main.py
+import os
+import time
 import logging
 from contextlib import asynccontextmanager
 from typing import cast, Any
@@ -8,19 +10,17 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+
 from fastapi.responses import HTMLResponse
 from pydantic import ValidationError
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
-from slowapi.middleware import SlowAPIMiddleware
-import os
-import time
 
 from starlette import status
 from starlette.responses import JSONResponse
 
+from src.core.templates import templates
 from src.database.postgres import create_tables, engine
 from src.database.redis_client import redis_manager
 from src.endpoints import webinars
@@ -30,7 +30,6 @@ from src.endpoints.likes import likes_router
 from src.endpoints.payments import payments_router
 from src.endpoints.projects import projects_router
 from src.endpoints.websocket import projects_web_router
-
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +146,14 @@ async def log_slow_requests(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    return response
+
 # ========== EXCEPTION HANDLERS ==========
 
 @app.exception_handler(Exception)
@@ -199,10 +206,24 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
         content={"detail": "Too many requests"}
     )
 
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: Exception):
+    """Обработчик 404 ошибок"""
+    # Если запрос к API - возвращаем JSON
+    if request.url.path.startswith('/api/'):
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "Endpoint not found"}
+        )
+    # Если запрос к странице - возвращаем HTML
+    return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+
 # ========== STATIC FILES & TEMPLATES ==========
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "src", "static")
+
 app.mount("/static", StaticFiles(directory="src/static"), name="static")
-templates = Jinja2Templates(directory="src/templates")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -223,6 +244,11 @@ async def register_page(request: Request):
 async def login_page(request: Request):
     """Страница входа - HTML"""
     return templates.TemplateResponse("auth/login.html", {"request": request})  # ← auth/login.html
+
+@app.get("/verify-2fa", response_class=HTMLResponse)
+async def verify_2fa_page(request: Request):
+    """Страница подтверждения 2FA"""
+    return templates.TemplateResponse("auth/verify_2fa.html", {"request": request})
 
 # Дополнительные HTML страницы
 @app.get("/projects-page", response_class=HTMLResponse)
@@ -295,10 +321,12 @@ async def api_status(request: Request):
 async def get_online_users_count():
     """Получение количества онлайн пользователей из Redis"""
     try:
-        # Пример: получаем количество подключенных WebSocket сессий
+        if not redis_manager.redis_client:
+            return 0
         keys = await redis_manager.redis_client.keys("websocket:*")
         return len(keys)
-    except:
+    except Exception as e:
+        logger.warning(f"Ошибка получения онлайн пользователей: {e}")
         return 0
 
 # ========== ПОДКЛЮЧЕНИЕ РОУТЕРОВ ==========

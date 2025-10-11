@@ -16,37 +16,28 @@ from src.services.sms_service import sms_service
 
 logger = logging.getLogger(__name__)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["argon2", "bcrypt"],  # Argon2 первый - без ограничений
+    deprecated="auto",
 
+    # Настройки Argon2 (без ограничений по длине)
+    argon2__time_cost=3,
+    argon2__memory_cost=65536,
+    argon2__parallelism=2,
 
-def verify_password(plain_password, hashed_password):
-    logger.debug(f"Verifying password for user")
-    return pwd_context.verify(plain_password, hashed_password)
+    # Настройки bcrypt (на всякий случай)
+    bcrypt__rounds=12,
+)
 
 
 def get_password_hash(password: str) -> str:
-    logger.info(f"Starting password hash process")
-    logger.debug(f"Password length: {len(password)} characters")
-    logger.debug(f"Password bytes length: {len(password.encode('utf-8'))} bytes")
+    """Хеширование пароля"""
+    return pwd_context.hash(password)
 
-    try:
-        # Проверяем длину в байтах
-        password_bytes = password.encode('utf-8')
-        if len(password_bytes) > 72:
-            logger.warning(f"Password too long: {len(password_bytes)} bytes, truncating to 72 bytes")
-            password_bytes = password_bytes[:72]
-            password = password_bytes.decode('utf-8', errors='ignore')
-            logger.debug(f"Truncated password length: {len(password)} characters")
 
-        logger.debug("Calling pwd_context.hash()")
-        result = pwd_context.hash(password)
-        logger.info("Password hash created successfully")
-        return result
-
-    except Exception as e:
-        logger.error(f"Password hashing failed: {str(e)}")
-        logger.exception("Full exception details:")  # Автоматически добавляет traceback
-        raise
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Проверка пароля"""
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -167,9 +158,11 @@ async def generate_and_send_sms_code(db: AsyncSession, user: models.User) -> str
     await db.commit()
     await db.refresh(sms_code)
 
-    # В development просто логируем
+    # ✅ В development логируем и ВОЗВРАЩАЕМ код для тестирования
     print(f"📱 SMS код для {user.phone}: {code}")
-    # В production: await sms_service.send_verification_code(user.phone, code)
+    logger.info(f"SMS код для {user.email} ({user.phone}): {code}")
+
+    # ✅ В production: await sms_service.send_verification_code(user.phone, code)
 
     return code
 

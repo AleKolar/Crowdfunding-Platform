@@ -108,7 +108,8 @@ services:
       - redis
     volumes:
       - .:/app  # Для разработки - монтируем код
-
+    command: celery -A src.tasks.celery_app beat --loglevel=info
+    
 volumes:
   postgres_data:
   redis_data:

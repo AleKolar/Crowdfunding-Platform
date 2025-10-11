@@ -1,5 +1,5 @@
 # src/schemas/user.py
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -12,8 +12,7 @@ class UserBase(BaseModel):
     is_active: bool
     roles: List[str] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserCreate(UserBase):
     """Схема создания пользователя"""
@@ -35,8 +34,7 @@ class UserResponse(UserBase):
     created_at: datetime
     last_login: Optional[datetime]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserProfileBase(BaseModel):
@@ -65,8 +63,7 @@ class UserProfileResponse(UserProfileBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserSettingsBase(BaseModel):
@@ -90,8 +87,7 @@ class UserSettingsResponse(UserSettingsBase):
     id: int
     user_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SubscriptionBase(BaseModel):
@@ -110,8 +106,7 @@ class SubscriptionResponse(SubscriptionBase):
     subscriber_id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserWithProfileResponse(UserResponse):

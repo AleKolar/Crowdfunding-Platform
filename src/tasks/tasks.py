@@ -10,6 +10,7 @@ from src.database import models
 from src.repository.webinar_repository import webinar_repository
 from src.services.email_service import email_service
 from src.services.template_service import template_service
+from src.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-@celery.task
+@celery_app.task
 def send_welcome_email(user_email: str, username: str):
     """Приветственное письмо новому пользователю"""
     try:
@@ -45,7 +46,7 @@ def send_welcome_email(user_email: str, username: str):
         logger.error(f"Error sending welcome email: {e}")
 
 
-@celery.task
+@celery_app.task
 def send_webinar_reminders():
     """Отправка напоминаний о вебинарах через систему уведомлений"""
     db = SessionLocal()
@@ -86,7 +87,7 @@ def send_webinar_reminders():
         db.close()
 
 
-@celery.task
+@celery_app.task
 def send_webinar_reminder_email(user_email: str, username: str, webinar_title: str, scheduled_at: datetime,
                                 webinar_id: int):
     """Email напоминание о вебинаре"""
@@ -111,7 +112,7 @@ def send_webinar_reminder_email(user_email: str, username: str, webinar_title: s
         logger.error(f"Error sending webinar reminder: {e}")
 
 
-@celery.task
+@celery_app.task
 def process_email_queue():
     """ НОВАЯ ЗАДАЧА: Обработка очереди email"""
     db = SessionLocal()
@@ -164,7 +165,7 @@ def process_email_queue():
         db.close()
 
 
-@celery.task
+@celery_app.task
 def cleanup_old_data():
     """ НОВАЯ ЗАДАЧА: Очистка устаревших данных"""
     db = SessionLocal()
@@ -201,7 +202,7 @@ def cleanup_old_data():
         db.close()
 
 
-@celery.task
+@celery_app.task
 def create_platform_notification(user_id: int, title: str, message: str, notification_type: str):
     """Создание уведомления на платформе"""
     db = SessionLocal()
@@ -225,7 +226,7 @@ def create_platform_notification(user_id: int, title: str, message: str, notific
         db.close()
 
 
-@celery.task
+@celery_app.task
 def notify_followers_new_post(creator_id: int, post_id: int):
     """Уведомление подписчиков о новом посте"""
     db = SessionLocal()
@@ -257,7 +258,7 @@ def notify_followers_new_post(creator_id: int, post_id: int):
         db.close()
 
 
-@celery.task
+@celery_app.task
 def send_websocket_notification(user_id: int, notification_type: str, data: dict):
     """Отправка уведомления через WebSocket"""
     try:

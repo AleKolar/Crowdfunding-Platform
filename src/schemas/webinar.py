@@ -1,7 +1,7 @@
 # src/schemas/webinar.py
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 # Базовые схемы
@@ -36,8 +36,7 @@ class Webinar(WebinarBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Старые схемы для обратной совместимости

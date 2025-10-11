@@ -84,12 +84,15 @@ class AuthService:
             )
 
         # Генерируем и отправляем SMS код
-        await generate_and_send_sms_code(db, user)
+        sms_code = await generate_and_send_sms_code(db, user)
 
         return {
             "requires_2fa": True,
             "message": "SMS код отправлен на ваш телефон",
-            "user_id": user.id
+            "user_id": user.id,
+            "test_sms_code": sms_code,
+            "user_phone": user.phone,
+            "note": "Это тестовый режим - используйте код выше для входа"
         }
 
     @staticmethod

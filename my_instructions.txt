@@ -1,5 +1,5 @@
 git add .
-git commit -m "fix conftest and tests of auth"
+git commit -m "manual authorization testing"
 git push origin main
 
 git add .
@@ -50,3 +50,7 @@ git push origin main
 # uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 
 # uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# Все тесты: pytest tests --html=report.html --self-contained-html
+
+# python run_dev.py

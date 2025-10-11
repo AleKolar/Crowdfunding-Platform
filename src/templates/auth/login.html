@@ -4,157 +4,158 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="text-center">🔐 Вход в систему</h3>
-            </div>
-            <div class="card-body">
+    <div class="col-md-6 col-lg-5">
+        <div class="card card-custom">
+            <div class="card-body p-4">
+                <h2 class="text-center mb-4">🔐 Вход в систему</h2>
+                <p class="text-center text-muted mb-4">
+                    Введите email и секретный код для входа
+                </p>
+
                 <form id="loginForm">
                     <div class="mb-3">
-                        <label for="email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="email" required>
+                        <label for="email" class="form-label">📧 Email</label>
+                        <input type="email" class="form-control" id="email" name="email"
+                               placeholder="your@email.com" required>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="secret_code" class="form-label">Секретный код</label>
-                        <input type="text" class="form-control" id="secret_code" maxlength="4" pattern="\d{4}" required>
+
+                    <div class="mb-4">
+                        <label for="secret_code" class="form-label">🔐 Секретный код (4 цифры)</label>
+                        <input type="text" class="form-control" id="secret_code" name="secret_code"
+                               placeholder="1234" pattern="[0-9]{4}" maxlength="4" required>
+                        <div class="form-text">Тот же код, что использовали при регистрации</div>
                     </div>
-                    
-                    <button type="submit" class="btn btn-primary w-100">Войти</button>
+
+                    <button type="submit" class="btn btn-primary btn-custom w-100 py-2">
+                        🔑 Войти
+                    </button>
                 </form>
-                
-                <div class="mt-3 text-center">
-                    <p>Нет аккаунта? <a href="/register">Зарегистрируйтесь</a></p>
+
+                <div class="text-center mt-3">
+                    <small class="text-muted">
+                        Нет аккаунта? <a href="/register" class="text-decoration-none">Зарегистрируйтесь</a>
+                    </small>
                 </div>
-            </div>
-        </div>
-        
-        <div id="loginResult" class="mt-3"></div>
-        
-        <!-- Блок для 2FA -->
-        <div id="twoFactorSection" class="card mt-3" style="display: none;">
-            <div class="card-header">
-                <h5 class="text-center">📱 Двухфакторная аутентификация</h5>
-            </div>
-            <div class="card-body">
-                <p id="smsMessage" class="text-center"></p>
-                <form id="twoFactorForm">
-                    <div class="mb-3">
-                        <label for="sms_code" class="form-label">SMS код</label>
-                        <input type="text" class="form-control" id="sms_code" maxlength="6" pattern="\d{6}" required>
-                    </div>
-                    <button type="submit" class="btn btn-success w-100">Подтвердить</button>
-                </form>
+
+                <!-- Блок для результатов -->
+                <div id="result" class="mt-4"></div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-let currentUserId = null;
-
-// Первый этап - вход с email и секретным кодом
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    
-    const formData = {
-        email: document.getElementById('email').value,
-        secret_code: document.getElementById('secret_code').value
+
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+
+    // Показываем загрузку
+    submitBtn.innerHTML = '⏳ Вход...';
+    submitBtn.disabled = true;
+
+    const formData = new FormData(this);
+    const data = {
+        email: formData.get('email'),
+        secret_code: formData.get('secret_code')
     };
-    
-    const resultDiv = document.getElementById('loginResult');
-    
+
+    console.log('📤 Отправка данных входа:', data);
+
     try {
-        resultDiv.innerHTML = '<div class="alert alert-info">Входим в систему...</div>';
-        
         const response = await fetch('/auth/login', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify(formData)
+            body: JSON.stringify(data)
         });
-        
+
         const result = await response.json();
-        
-        if (response.ok && result.requires_2fa) {
-            currentUserId = result.user_id;
-            document.getElementById('smsMessage').textContent = result.message;
-            document.getElementById('twoFactorSection').style.display = 'block';
-            resultDiv.innerHTML = '<div class="alert alert-info">SMS код отправлен на ваш телефон</div>';
+
+        if (response.ok) {
+            // ✅ УСПЕШНЫЙ ВХОД - ПОКАЗЫВАЕМ SMS КОД И ПРЕДЛАГАЕМ ПЕРЕЙТИ
+            let successHtml = `
+                <div class="alert alert-success">
+                    <h5>✅ Первый этап пройден!</h5>
+                    <p>${result.message}</p>
+            `;
+
+            // ✅ ДОБАВЛЯЕМ ТЕСТОВЫЙ SMS КОД ЕСЛИ ЕСТЬ
+            if (result.test_sms_code) {
+                successHtml += `
+                    <div class="mt-3 p-3 bg-light border rounded">
+                        <h6>🔐 ТЕСТОВЫЙ РЕЖИМ</h6>
+                        <p class="mb-1"><strong>Телефон:</strong> ${result.user_phone || 'Не указан'}</p>
+                        <p class="mb-1"><strong>SMS код для входа:</strong></p>
+                        <h4 class="text-center text-primary">${result.test_sms_code}</h4>
+                        <small class="text-muted">Используйте этот код на следующем этапе</small>
+                    </div>
+                `;
+            }
+
+            successHtml += `</div>`;
+
+            document.getElementById('result').innerHTML = successHtml;
+
+            // ✅ СОХРАНЯЕМ EMAIL ДЛЯ СЛЕДУЮЩЕГО ЭТАПА
+            localStorage.setItem('login_email', data.email);
+
+            // ✅ ПРЕДЛАГАЕМ ПЕРЕЙТИ К 2FA ЧЕРЕЗ 2 СЕКУНДЫ
+            setTimeout(() => {
+                const goTo2FA = confirm('Перейти к подтверждению SMS кода?');
+                if (goTo2FA) {
+                    window.location.href = '/verify-2fa?email=' + encodeURIComponent(data.email);
+                }
+            }, 2000);
+
         } else {
-            resultDiv.innerHTML = `
+            // ❌ ОШИБКА ВХОДА
+            document.getElementById('result').innerHTML = `
                 <div class="alert alert-danger">
                     <h5>❌ Ошибка входа</h5>
-                    <p>${result.detail}</p>
+                    <p class="mb-0">${result.detail || 'Неверные данные'}</p>
                 </div>
             `;
         }
+
     } catch (error) {
-        resultDiv.innerHTML = `
+        console.error('❌ Ошибка:', error);
+        document.getElementById('result').innerHTML = `
             <div class="alert alert-danger">
-                <h5>💥 Ошибка сети</h5>
-                <p>${error.message}</p>
+                <h5>❌ Ошибка сети</h5>
+                <p class="mb-0">Проверьте подключение к интернету</p>
             </div>
         `;
+    } finally {
+        // Восстанавливаем кнопку
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
     }
 });
 
-// Второй этап - верификация SMS кода
-document.getElementById('twoFactorForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const smsCode = document.getElementById('sms_code').value;
-    const resultDiv = document.getElementById('loginResult');
-    
-    try {
-        resultDiv.innerHTML = '<div class="alert alert-info">Проверяем SMS код...</div>';
-        
-        const response = await fetch('/auth/verify-2fa', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                user_id: currentUserId,
-                sms_code: smsCode
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (response.ok) {
-            resultDiv.innerHTML = `
-                <div class="alert alert-success">
-                    <h5>🎉 Успешный вход!</h5>
-                    <p><strong>Токен:</strong> ${result.access_token}</p>
-                    <p><strong>Тип:</strong> ${result.token_type}</p>
-                    <p><strong>Истекает через:</strong> ${result.expires_in} секунд</p>
-                    <p class="mt-3">
-                        <a href="/dashboard" class="btn btn-success">Перейти в дашборд</a>
-                    </p>
-                </div>
-            `;
-            
-            // Сохраняем токен в localStorage
-            localStorage.setItem('auth_token', result.access_token);
-            document.getElementById('twoFactorSection').style.display = 'none';
-        } else {
-            resultDiv.innerHTML = `
-                <div class="alert alert-danger">
-                    <h5>❌ Ошибка верификации</h5>
-                    <p>${result.detail}</p>
-                </div>
-            `;
-        }
-    } catch (error) {
-        resultDiv.innerHTML = `
-            <div class="alert alert-danger">
-                <h5>💥 Ошибка сети</h5>
-                <p>${error.message}</p>
-            </div>
-        `;
+// Валидация секретного кода
+document.getElementById('secret_code').addEventListener('input', function(e) {
+    // Только цифры, максимум 4 символа
+    this.value = this.value.replace(/[^\d]/g, '').slice(0, 4);
+});
+
+// ✅ ДОБАВЛЯЕМ ВОЗМОЖНОСТЬ БЫСТРОГО ПЕРЕХОДА К 2FA
+document.addEventListener('DOMContentLoaded', function() {
+    // Проверяем, не пришли ли мы сюда после успешной регистрации
+    const urlParams = new URLSearchParams(window.location.search);
+    const registeredEmail = urlParams.get('registered_email');
+
+    if (registeredEmail) {
+        document.getElementById('email').value = registeredEmail;
+        // Показываем подсказку
+        const hint = document.createElement('div');
+        hint.className = 'alert alert-info mt-3';
+        hint.innerHTML = '🎉 Регистрация успешна! Заполните секретный код для входа.';
+        document.getElementById('loginForm').parentNode.insertBefore(hint, document.getElementById('loginForm'));
     }
 });
 </script>

@@ -1,89 +1,102 @@
-// Базовые функции для работы с API
-const API_BASE = 'http://localhost:8000';
+// ОСНОВНОЙ JAVASCRIPT ДЛЯ ПРИЛОЖЕНИЯ
+console.log("🚀 main.js загружен успешно!");
 
-function logResult(message) {
-    const results = document.getElementById('api-results');
-    results.textContent += `\n${new Date().toLocaleTimeString()}: ${message}`;
-    results.scrollTop = results.scrollHeight;
-}
+// Утилиты для работы с API
+class ApiClient {
+    static async request(endpoint, options = {}) {
+        try {
+            const response = await fetch(endpoint, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            });
 
-async function testAuth() {
-    try {
-        logResult('🔐 Тестируем аутентификацию...');
+            const data = await response.json();
+            return {
+                success: response.ok,
+                data: data,
+                status: response.status
+            };
+        } catch (error) {
+            console.error('API Error:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
 
-        // Тест регистрации
-        const registerData = {
-            email: `test_${Date.now()}@example.com`,
-            phone: `+7999${Date.now().toString().slice(-7)}`,
-            username: `user_${Date.now().toString().slice(-6)}`,
-            password: "TestPass123!",
-            secret_code: "1234"
-        };
-
-        const registerResponse = await fetch(`${API_BASE}/auth/register`, {
+    static async post(endpoint, data) {
+        return this.request(endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(registerData)
+            body: JSON.stringify(data)
         });
-
-        if (registerResponse.ok) {
-            const registerResult = await registerResponse.json();
-            logResult(`✅ Регистрация успешна! User ID: ${registerResult.user_id}`);
-
-            // Обновляем информацию о пользователе
-            document.getElementById('user-id').textContent = registerResult.user_id;
-            document.getElementById('user-email').textContent = registerData.email;
-            document.getElementById('user-status').textContent = 'Зарегистрирован';
-            document.getElementById('user-status').className = 'badge bg-success';
-
-        } else {
-            const error = await registerResponse.json();
-            logResult(`❌ Ошибка регистрации: ${error.detail}`);
-        }
-    } catch (error) {
-        logResult(`💥 Ошибка: ${error.message}`);
     }
 }
 
-async function getProjects() {
-    try {
-        logResult('📊 Получаем список проектов...');
+// Управление уведомлениями
+function showAlert(message, type = 'info') {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
 
-        const response = await fetch(`${API_BASE}/projects/`);
+    document.querySelector('.container').prepend(alertDiv);
 
-        if (response.ok) {
-            const projects = await response.json();
-            logResult(`✅ Получено проектов: ${projects.pagination?.total || projects.length}`);
-            logResult(JSON.stringify(projects, null, 2));
-        } else {
-            const error = await response.json();
-            logResult(`❌ Ошибка получения проектов: ${error.detail}`);
+    // Автоматическое скрытие через 5 секунд
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
         }
-    } catch (error) {
-        logResult(`💥 Ошибка: ${error.message}`);
+    }, 5000);
+}
+
+// Проверка авторизации
+function checkAuthStatus() {
+    const authStatus = document.getElementById('authStatus');
+    if (!authStatus) return;
+
+    const token = localStorage.getItem('auth_token');
+
+    if (token) {
+        authStatus.textContent = '✅ Авторизован';
+        authStatus.className = 'nav-link text-success';
+    } else {
+        authStatus.textContent = '❌ Не авторизован';
+        authStatus.className = 'nav-link text-warning';
     }
 }
 
-async function getWebinars() {
-    try {
-        logResult('🎥 Получаем список вебинаров...');
-
-        const response = await fetch(`${API_BASE}/webinars/announcements`);
-
-        if (response.ok) {
-            const webinars = await response.json();
-            logResult(`✅ Получено анонсов вебинаров: ${webinars.count}`);
-            logResult(JSON.stringify(webinars, null, 2));
-        } else {
-            const error = await response.json();
-            logResult(`❌ Ошибка получения вебинаров: ${error.detail}`);
-        }
-    } catch (error) {
-        logResult(`💥 Ошибка: ${error.message}`);
-    }
-}
-
-// Инициализация
+// Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
-    logResult('🚀 Дашборд загружен! Используйте кнопки для тестирования API.');
+    console.log("✅ DOM загружен, инициализация...");
+
+    checkAuthStatus();
+
+    // Показываем тестовое уведомление
+    showAlert('✅ CSS и JavaScript успешно загружены!', 'success');
+
+    // Добавляем кнопку выхода если авторизован
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+        const navbar = document.querySelector('.navbar-nav');
+        if (navbar) {
+            const logoutBtn = document.createElement('a');
+            logoutBtn.className = 'nav-link text-danger';
+            logoutBtn.href = '#';
+            logoutBtn.innerHTML = '🚪 Выход';
+            logoutBtn.onclick = function(e) {
+                e.preventDefault();
+                localStorage.removeItem('auth_token');
+                window.location.href = '/';
+            };
+            navbar.appendChild(logoutBtn);
+        }
+    }
+
+    console.log("🎉 Инициализация завершена!");
 });

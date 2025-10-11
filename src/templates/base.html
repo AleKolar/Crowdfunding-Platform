@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Crowdfunding Platform{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- ✅ ПРАВИЛЬНЫЕ ПУТИ -->
     <link href="/static/css/style.css" rel="stylesheet">
+    <link href="/static/css/email.css" rel="stylesheet">
+
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -16,9 +21,8 @@
                 <a class="nav-link" href="/dashboard">Дашборд</a>
                 <a class="nav-link" href="/register">Регистрация</a>
                 <a class="nav-link" href="/login">Вход</a>
-                <!-- СТАТУС АВТОРИЗАЦИИ - ДОБАВЬТЕ ЭТУ СТРОКУ -->
                 <span class="nav-link text-warning" id="authStatus">
-                    Не авторизован
+                    Загрузка...
                 </span>
             </div>
         </div>
@@ -29,22 +33,10 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- ✅ ПРАВИЛЬНЫЙ ПУТЬ -->
     <script src="/static/js/main.js"></script>
 
-    <script>
-    // Проверяем статус авторизации при загрузке страницы
-    document.addEventListener('DOMContentLoaded', function() {
-        const authStatus = document.getElementById('authStatus');
-        const token = localStorage.getItem('auth_token');
-
-        if (token) {
-            authStatus.textContent = '✅ Авторизован';
-            authStatus.className = 'nav-link text-success';
-        } else {
-            authStatus.textContent = '❌ Не авторизован';
-            authStatus.className = 'nav-link text-warning';
-        }
-    });
-    </script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

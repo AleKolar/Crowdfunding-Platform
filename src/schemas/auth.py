@@ -1,5 +1,5 @@
 # src/schemas/auth.py
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from datetime import datetime
 import re
 
@@ -96,5 +96,4 @@ class SMSVerificationCodeResponse(SMSVerificationCodeBase):
     created_at: datetime
     expires_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
