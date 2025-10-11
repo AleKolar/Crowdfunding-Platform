@@ -63,8 +63,8 @@ class EmailService:
             # Если не предоставлен текстовый контент, создаем упрощенную версию
             if not text_content:
                 # Простая текстовая версия HTML контента
-                text_content = re.sub('<[^<]+?>', '', html_content)  # Удаляем HTML теги
-                text_content = re.sub('\n\s*\n', '\n', text_content)  # Убираем лишние переносы
+                text_content = re.sub(r'<[^<]+?>', '', html_content)  # Удаляем HTML теги
+                text_content = re.sub(r'\n\s*\n', '\n', text_content)  # Убираем лишние переносы
 
             # Добавляем обе версии (текстовую и HTML)
             part1 = MIMEText(text_content, "plain")

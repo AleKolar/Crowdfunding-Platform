@@ -22,7 +22,7 @@ print(f"🔧 Project root: {project_root}")
 from src.database import models
 
 # Мокаем LiveKit ДО импорта основного приложения
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 
 # Создаем мок для livekit
 mock_livekit = MagicMock()
@@ -128,16 +128,77 @@ def create_test_app():
 
     return test_app
 
+@pytest.fixture
+def mock_verification_codes():
+    """Фикстура для мока отправки кодов подтверждения"""
+    with patch('src.endpoints.auth.generate_and_send_verification_codes', new_callable=AsyncMock) as mock:
+        mock.return_value = {
+            "sms_code": "123456",
+            "email_code": "123456",
+            "sms_sent": True,
+            "email_sent": True
+        }
+        yield mock
 
-# 🔧 ГЛОБАЛЬНЫЙ МОК ДЛЯ CELERY - РЕШАЕТ ПРОБЛЕМУ С REDIS
 @pytest.fixture(autouse=True)
-def mock_celery_tasks():
-    """Глобальный мок для Celery задач во всех тестах"""
-    with patch('src.tasks.tasks.send_welcome_email.delay') as mock_welcome_email:
-        # Настраиваем мок
-        mock_welcome_email.return_value = None
+def mock_external_services():
+    """Автоматически мокаем внешние сервисы"""
+    # Мокаем только внешние вызовы, не методы сервисов
+    with patch('src.security.auth.generate_and_send_verification_codes') as mock_verification:
+        mock_verification.return_value = AsyncMock(return_value={
+            "sms_code": "123456",
+            "email_code": "123456",
+            "sms_sent": True,
+            "email_sent": True
+        })
         yield
 
+
+@pytest.fixture(autouse=True)
+def mock_all_external_services():
+    """Мокаем все внешние сервисы автоматически"""
+    with patch('src.services.template_service.template_service.render_email_template') as mock_template, \
+            patch('src.services.email_service.email_service.send_email') as mock_send_email, \
+            patch('src.services.email_service.email_service.send_verification_code_email') as mock_verification_email, \
+            patch('src.services.sms_service.sms_service.send_verification_code') as mock_sms:
+        mock_template.return_value = "<html>Test</html>"
+        mock_send_email.return_value = True
+        mock_verification_email.return_value = True
+        mock_sms.return_value = True
+
+        yield
+
+@pytest.fixture(autouse=True)
+def mock_email_templates():
+    """Мокаем рендеринг ВСЕХ email шаблонов"""
+    with patch('src.services.template_service.template_service.render_email_template') as mock_render:
+        mock_render.return_value = "<html>Test Email Content</html>"
+        yield
+
+@pytest.fixture(autouse=True)
+def mock_email_sending():
+    """Мокаем отправку ВСЕХ email"""
+    with patch('src.services.email_service.email_service.send_email') as mock_send:
+        mock_send.return_value = True
+        yield
+
+@pytest.fixture(autouse=True)
+def mock_sms_sending():
+    """Мокаем отправку ВСЕХ SMS"""
+    with patch('src.services.sms_service.sms_service.send_verification_code') as mock_sms:
+        mock_sms.return_value = True
+        yield
+
+@pytest.fixture(autouse=True)
+def mock_celery_tasks():
+    """Мокаем Celery задачи"""
+    with patch('src.tasks.tasks.create_platform_notification.delay') as mock_platform, \
+         patch('src.tasks.tasks.send_websocket_notification.delay') as mock_websocket, \
+         patch('src.tasks.tasks.send_verification_codes_task.delay') as mock_verification:
+        mock_platform.return_value = None
+        mock_websocket.return_value = None
+        mock_verification.return_value = None
+        yield
 
 # 🔧 ГЛОБАЛЬНЫЙ МОК ДЛЯ BCRYPT
 @pytest.fixture(autouse=True)

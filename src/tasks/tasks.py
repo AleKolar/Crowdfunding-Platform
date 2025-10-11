@@ -2,7 +2,7 @@
 from celery import Celery
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 import asyncio
 
@@ -36,7 +36,7 @@ def send_welcome_email(user_email: str, username: str):
             platform_url=settings.PLATFORM_URL
         )
 
-        # ✅ ИСПРАВЛЕНО: Создаем event loop для асинхронного вызова
+        # ✅ Создаем event loop для асинхронного вызова
         async def send_email_async():
             return await email_service.send_email(user_email, subject, html_content)
 
@@ -224,4 +224,127 @@ def process_email_queue():
     finally:
         db.close()
 
-# ... остальные задачи остаются без изменений
+
+@celery_app.task
+def create_platform_notification(user_id: int, title: str, message: str, notification_type: str):
+    """Создание уведомления на платформе"""
+    db = SessionLocal()
+    try:
+        notification = models.Notification(
+            user_id=user_id,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            is_read=False
+        )
+
+        db.add(notification)
+        db.commit()
+        logger.info(f"Platform notification created for user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error creating platform notification: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+@celery_app.task
+def send_websocket_notification(user_id: int, notification_type: str, data: dict):
+    """Отправка уведомления через WebSocket"""
+    try:
+        import redis
+        import json
+
+        r = redis.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            db=settings.REDIS_DB,
+            decode_responses=True
+        )
+
+        message = {
+            'user_id': user_id,
+            'type': notification_type,
+            'data': data,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        r.publish(f'user_{user_id}', json.dumps(message))
+        logger.info(f"WebSocket notification sent to user {user_id}: {notification_type}")
+
+    except Exception as e:
+        logger.error(f"Error sending WebSocket notification: {e}")
+
+
+@celery_app.task
+def send_verification_codes_task(user_email: str, username: str, phone: str, verification_code: str):
+    """Отправка кодов подтверждения по SMS и Email через Celery"""
+    try:
+        # ✅ ОТПРАВКА EMAIL С КОДОМ
+        async def send_verification_email():
+            from src.services.email_service import email_service
+            return await email_service.send_verification_code_email(
+                to_email=user_email,
+                username=username,
+                verification_code=verification_code
+            )
+
+        # ✅ ОТПРАВКА SMS С КОДОМ
+        async def send_verification_sms():
+            from src.services.sms_service import sms_service
+            return await sms_service.send_verification_code(phone, verification_code)
+
+        # Запускаем обе отправки
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            email_success = loop.run_until_complete(send_verification_email())
+            sms_success = loop.run_until_complete(send_verification_sms())
+
+            logger.info(f"🔐 Коды отправлены для {user_email}: SMS={sms_success}, Email={email_success}")
+
+        finally:
+            loop.close()
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка отправки кодов подтверждения: {e}")
+
+
+@celery_app.task
+def cleanup_old_data():
+    """Очистка устаревших данных"""
+    db = SessionLocal()
+    try:
+        from datetime import timedelta
+
+        # Очистка старых уведомлений (старше 30 дней)
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        old_notifications = db.scalars(
+            select(models.Notification).where(
+                models.Notification.created_at < thirty_days_ago
+            )
+        ).all()
+
+        for notification in old_notifications:
+            db.delete(notification)
+
+        # Очистка отправленных email из очереди (старше 7 дней)
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        old_emails = db.scalars(
+            select(models.EmailQueue).where(
+                models.EmailQueue.sent_at < seven_days_ago
+            )
+        ).all()
+
+        for email in old_emails:
+            db.delete(email)
+
+        db.commit()
+        logger.info(f"Cleaned up {len(old_notifications)} notifications and {len(old_emails)} emails")
+
+    except Exception as e:
+        logger.error(f"Error cleaning up old data: {e}")
+        db.rollback()
+    finally:
+        db.close()

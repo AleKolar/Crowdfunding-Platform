@@ -93,12 +93,7 @@ class AuthService:
         return {
             "requires_2fa": True,
             "message": "Коды подтверждения отправлены по SMS и Email",
-            "user_id": user.id,  # ✅ ВАЖНО: возвращаем user_id для verify-2fa
-            "test_sms_code": result["sms_code"],
-            "test_email_code": result["email_code"],
-            "user_phone": user.phone,
-            "user_email": user.email,
-            "note": "Это тестовый режим - используйте любой из кодов выше для входа"
+            "user_id": user.id,  # ✅ !!! ВАЖНО: возвращаем user_id для verify-2fa
         }
 
     @staticmethod
