@@ -60,6 +60,7 @@ class Verify2FARequest(BaseModel):
     user_id: int
     sms_code: str
 
+    model_config = ConfigDict(from_attributes=True)
 
 class TokenResponse(BaseModel):
     """Схема ответа с токеном"""

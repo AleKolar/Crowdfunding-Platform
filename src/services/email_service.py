@@ -6,6 +6,8 @@ from email.mime.multipart import MIMEMultipart
 from src.config.settings import settings
 import logging
 from typing import Optional
+import re
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +51,7 @@ class EmailService:
                          text_content: Optional[str] = None) -> bool:
         """
         Отправка письма на Email пользователя
-        В development режиме просто логируем
+        ВСЕГДА отправляем реальное письмо!
         """
         try:
             # Создаем сообщение
@@ -61,7 +63,6 @@ class EmailService:
             # Если не предоставлен текстовый контент, создаем упрощенную версию
             if not text_content:
                 # Простая текстовая версия HTML контента
-                import re
                 text_content = re.sub('<[^<]+?>', '', html_content)  # Удаляем HTML теги
                 text_content = re.sub('\n\s*\n', '\n', text_content)  # Убираем лишние переносы
 
@@ -72,35 +73,22 @@ class EmailService:
             message.attach(part1)
             message.attach(part2)
 
-            # В production отправляем реальное письмо
-            if settings.ENVIRONMENT == "production":
-                with self._create_smtp_connection() as server:
-                    server.login(self.smtp_username, self.smtp_password)
-                    server.send_message(message)
+            # ВСЕГДА отправляем реальное письмо!
+            with self._create_smtp_connection() as server:
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(message)
 
-                logger.info(f"Письмо отправлено на {to_email}: {subject}")
-                return True
-            else:
-                # В development режиме логируем
-                logger.info(f"DEVELOPMENT: Письмо подготовлено для {to_email}: {subject}")
-                print(f"📧 DEVELOPMENT MODE - Email would be sent to: {to_email}")
-                print(f"📧 Subject: {subject}")
-                print(f"📧 Content preview: {text_content[:100]}...")
-
-                # Эмуляция задержки сети
-                import asyncio
-                await asyncio.sleep(0.5)
-
-                return True
+            logger.info(f"✅ Письмо отправлено на {to_email}: {subject}")
+            return True
 
         except smtplib.SMTPAuthenticationError as e:
-            logger.error(f"Ошибка аутентификации SMTP: {e}")
+            logger.error(f"❌ Ошибка аутентификации SMTP: {e}")
             return False
         except smtplib.SMTPException as e:
-            logger.error(f"Ошибка SMTP при отправке письма: {e}")
+            logger.error(f"❌ Ошибка SMTP при отправке письма: {e}")
             return False
         except Exception as e:
-            logger.error(f"Ошибка отправки письма: {e}")
+            logger.error(f"❌ Ошибка отправки письма: {e}")
             return False
 
     async def send_welcome_email(self, to_email: str, username: str) -> bool:
@@ -128,7 +116,7 @@ class EmailService:
         reset_url = f"{settings.PLATFORM_URL}/reset-password?token={reset_token}"
 
         html_content = template_service.render_email_template(
-            "password_reset.html",  # Нужно создать этот шаблон
+            "password_reset.html",
             username=username,
             reset_url=reset_url,
             reset_token=reset_token
@@ -136,40 +124,18 @@ class EmailService:
 
         return await self.send_email(to_email, subject, html_content)
 
-    async def send_webinar_reminder_email(self, to_email: str, username: str,
-                                          webinar_title: str, scheduled_at: str,
-                                          webinar_id: int) -> bool:
+    async def send_verification_code_email(self, to_email: str, username: str, verification_code: str) -> bool:
         """
-        Отправка напоминания о вебинаре
+        Отправка кода подтверждения по email
         """
         from src.services.template_service import template_service
 
-        subject = f"🔔 Напоминание: вебинар '{webinar_title}'"
+        subject = "🔐 Код подтверждения для CrowdPlatform"
         html_content = template_service.render_email_template(
-            "webinar_reminder.html",
+            "verification_code.html",
             username=username,
-            webinar_title=webinar_title,
-            scheduled_at=scheduled_at,
-            webinar_url=f"{settings.PLATFORM_URL}/webinars/{webinar_id}"
-        )
-
-        return await self.send_email(to_email, subject, html_content)
-
-    async def send_notification_email(self, to_email: str, username: str,
-                                      notification_title: str, notification_message: str,
-                                      action_url: Optional[str] = None) -> bool:
-        """
-        Отправка общего уведомительного письма
-        """
-        from src.services.template_service import template_service
-
-        subject = f"📢 {notification_title}"
-        html_content = template_service.render_email_template(
-            "notification.html",  # Нужно создать этот шаблон
-            username=username,
-            notification_title=notification_title,
-            notification_message=notification_message,
-            action_url=action_url
+            verification_code=verification_code,
+            platform_url=settings.PLATFORM_URL
         )
 
         return await self.send_email(to_email, subject, html_content)
@@ -181,10 +147,10 @@ class EmailService:
         try:
             with self._create_smtp_connection() as server:
                 server.login(self.smtp_username, self.smtp_password)
-                logger.info("SMTP соединение успешно установлено")
+                logger.info("✅ SMTP соединение успешно установлено")
                 return True
         except Exception as e:
-            logger.error(f"Ошибка тестирования SMTP соединения: {e}")
+            logger.error(f"❌ Ошибка тестирования SMTP соединения: {e}")
             return False
 
 

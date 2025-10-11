@@ -1,5 +1,5 @@
 git add .
-git commit -m "manual authorization testing"
+git commit -m "added sending a confirmation code via email"
 git push origin main
 
 git add .
@@ -27,7 +27,7 @@ git push origin main
 # uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 
 # Удалите кэш если есть
-# rm -Force openapi.json - у меня, пока, нет
+# rm -Force openapi.json
 
 # 🚀 API Docs: CI/CD пайплайн !!!
 # После запуска: http://localhost:8000/docs

@@ -12,7 +12,7 @@ from src.security.auth import (
     get_user_by_phone,
     get_password_hash,
     authenticate_user,
-    generate_and_send_sms_code,
+    generate_and_send_verification_codes,  # ✅ Используем новый метод
     verify_sms_code,
     create_access_token
 )
@@ -60,15 +60,19 @@ class AuthService:
         await db.commit()
         await db.refresh(new_user)
 
-        logger.info(f"User registered successfully: {new_user.id}")
+        logger.info(f"✅ Пользователь зарегистрирован: {new_user.id}")
 
-        # Отправка приветственного письма (асинхронно)
-        send_welcome_email.delay(user_data.email, user_data.username)
+        # ✅ ОТПРАВКА ПРИВЕТСТВЕННОГО ПИСЬМА ЧЕРЕЗ CELERY
+        send_welcome_email.delay(
+            user_email=new_user.email,
+            username=new_user.username
+        )
 
         return {
-            "message": "Пользователь зарегистрирован",
+            "message": "Пользователь зарегистрирован успешно. Проверьте вашу почту для приветственного письма.",
             "user_id": new_user.id,
-            "email": user_data.email
+            "email": new_user.email,
+            "username": new_user.username
         }
 
     @staticmethod
@@ -83,35 +87,48 @@ class AuthService:
                 detail="Неверный email или секретный код",
             )
 
-        # Генерируем и отправляем SMS код
-        sms_code = await generate_and_send_sms_code(db, user)
+        # ✅ ОТПРАВЛЯЕМ КОДЫ И ПО SMS И ПО EMAIL
+        result = await generate_and_send_verification_codes(db, user)
 
         return {
             "requires_2fa": True,
-            "message": "SMS код отправлен на ваш телефон",
-            "user_id": user.id,
-            "test_sms_code": sms_code,
+            "message": "Коды подтверждения отправлены по SMS и Email",
+            "user_id": user.id,  # ✅ ВАЖНО: возвращаем user_id для verify-2fa
+            "test_sms_code": result["sms_code"],
+            "test_email_code": result["email_code"],
             "user_phone": user.phone,
-            "note": "Это тестовый режим - используйте код выше для входа"
+            "user_email": user.email,
+            "note": "Это тестовый режим - используйте любой из кодов выше для входа"
         }
 
     @staticmethod
     async def verify_2fa(verify_data: Verify2FARequest, db: AsyncSession) -> dict:
         """
-        Второй этап аутентификации - верификация SMS кода
+        Второй этап аутентификации - верификация кода
         """
-        user = await verify_sms_code(db, verify_data.user_id, verify_data.sms_code)
+        # ✅ ИСПОЛЬЗУЕМ user_id ИЗ ЗАПРОСА (без изменений в схеме)
+        result = await db.execute(select(models.User).where(models.User.id == verify_data.user_id))
+        user = result.scalar_one_or_none()
+
         if not user:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Неверный SMS код",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Пользователь не найден"
             )
 
-        # Создаем access token с флагом 2FA verified
+        # Проверяем код
+        is_valid = await verify_sms_code(db, user.id, verify_data.sms_code)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Неверный код подтверждения",
+            )
+
+        # Создаем access token
         access_token = create_access_token(
             data={
-                "sub": str(user.id),  # user_id как строка (как ожидает ваш get_current_user)
-                "2fa_verified": True, # флаг 2FA верификации
+                "sub": str(user.id),
+                "2fa_verified": True,
                 "email": user.email
             }
         )
@@ -119,9 +136,10 @@ class AuthService:
         return {
             "access_token": access_token,
             "token_type": "bearer",
-            "expires_in": 3600,  # или из настроек
+            "expires_in": 3600,
             "user_id": user.id,
-            "email": user.email
+            "email": user.email,
+            "username": user.username
         }
 
     @staticmethod
@@ -152,7 +170,7 @@ class AuthService:
     @staticmethod
     async def resend_sms_code(user_id: int, db: AsyncSession) -> dict[str, Any]:
         """
-        Повторная отправка SMS кода
+        Повторная отправка кодов подтверждения
         """
         result = await db.execute(select(models.User).where(models.User.id == user_id))
         user = result.scalar_one_or_none()
@@ -163,6 +181,11 @@ class AuthService:
                 detail="Пользователь не найден"
             )
 
-        await generate_and_send_sms_code(db, user)
+        # ✅ ОТПРАВЛЯЕМ КОДЫ И ПО SMS И ПО EMAIL
+        result = await generate_and_send_verification_codes(db, user)
 
-        return {"message": "Новый SMS код отправлен"}
+        return {
+            "message": "Новые коды подтверждения отправлены по SMS и Email",
+            "test_sms_code": result["sms_code"],
+            "test_email_code": result["email_code"]
+        }

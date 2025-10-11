@@ -1,3 +1,4 @@
+<!-- src/templates/emails/login.html -->
 {% extends "base.html" %}
 
 {% block title %}Вход - Crowdfunding{% endblock %}
@@ -77,22 +78,25 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         const result = await response.json();
 
         if (response.ok) {
-            // ✅ УСПЕШНЫЙ ВХОД - ПОКАЗЫВАЕМ SMS КОД И ПРЕДЛАГАЕМ ПЕРЕЙТИ
+            // ✅ УСПЕШНЫЙ ВХОД - ПОКАЗЫВАЕМ КОДЫ И ПРЕДЛАГАЕМ ПЕРЕЙТИ
             let successHtml = `
                 <div class="alert alert-success">
                     <h5>✅ Первый этап пройден!</h5>
                     <p>${result.message}</p>
             `;
 
-            // ✅ ДОБАВЛЯЕМ ТЕСТОВЫЙ SMS КОД ЕСЛИ ЕСТЬ
-            if (result.test_sms_code) {
+            // ✅ ДОБАВЛЯЕМ ТЕСТОВЫЕ КОДЫ ЕСЛИ ЕСТЬ
+            if (result.test_sms_code && result.test_email_code) {
                 successHtml += `
                     <div class="mt-3 p-3 bg-light border rounded">
                         <h6>🔐 ТЕСТОВЫЙ РЕЖИМ</h6>
                         <p class="mb-1"><strong>Телефон:</strong> ${result.user_phone || 'Не указан'}</p>
+                        <p class="mb-1"><strong>Email:</strong> ${result.user_email || 'Не указан'}</p>
                         <p class="mb-1"><strong>SMS код для входа:</strong></p>
                         <h4 class="text-center text-primary">${result.test_sms_code}</h4>
-                        <small class="text-muted">Используйте этот код на следующем этапе</small>
+                        <p class="mb-1"><strong>Email код для входа:</strong></p>
+                        <h4 class="text-center text-primary">${result.test_email_code}</h4>
+                        <small class="text-muted">Используйте любой из этих кодов на следующем этапе</small>
                     </div>
                 `;
             }
@@ -101,14 +105,15 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
 
             document.getElementById('result').innerHTML = successHtml;
 
-            // ✅ СОХРАНЯЕМ EMAIL ДЛЯ СЛЕДУЮЩЕГО ЭТАПА
+            // ✅ СОХРАНЯЕМ EMAIL И USER_ID ДЛЯ СЛЕДУЮЩЕГО ЭТАПА
             localStorage.setItem('login_email', data.email);
+            localStorage.setItem('user_id', result.user_id);
 
             // ✅ ПРЕДЛАГАЕМ ПЕРЕЙТИ К 2FA ЧЕРЕЗ 2 СЕКУНДЫ
             setTimeout(() => {
-                const goTo2FA = confirm('Перейти к подтверждению SMS кода?');
+                const goTo2FA = confirm('Перейти к подтверждению кода?');
                 if (goTo2FA) {
-                    window.location.href = '/verify-2fa?email=' + encodeURIComponent(data.email);
+                    window.location.href = '/verify-2fa?email=' + encodeURIComponent(data.email) + '&user_id=' + result.user_id;
                 }
             }, 2000);
 

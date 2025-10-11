@@ -1,3 +1,4 @@
+<!-- src/templates/emails/verify_2fa.html -->
 {% extends "base.html" %}
 
 {% block title %}Подтверждение 2FA - Crowdfunding{% endblock %}
@@ -9,17 +10,20 @@
             <div class="card-body p-4">
                 <h2 class="text-center mb-4">📱 Подтверждение входа</h2>
                 <p class="text-center text-muted mb-4">
-                    Введите SMS код, отправленный на ваш телефон
+                    Введите код, отправленный на ваш телефон и email
                 </p>
 
                 <form id="verify2faForm">
                     <input type="hidden" id="user_email" name="email">
-                    
+                    <input type="hidden" id="user_id" name="user_id">
+
                     <div class="mb-4">
-                        <label for="sms_code" class="form-label">📲 SMS код (6 цифр)</label>
-                        <input type="text" class="form-control" id="sms_code" name="sms_code" 
+                        <label for="sms_code" class="form-label">🔐 Код подтверждения (6 цифр)</label>
+                        <input type="text" class="form-control" id="sms_code" name="sms_code"
                                placeholder="123456" pattern="[0-9]{6}" maxlength="6" required>
-                        <div class="form-text">Код действителен 10 минут</div>
+                        <div class="form-text">
+                            Код отправлен по SMS на телефон и по Email. Действителен 10 минут.
+                        </div>
                     </div>
 
                     <button type="submit" class="btn btn-success btn-custom w-100 py-2">
@@ -28,7 +32,7 @@
                 </form>
 
                 <div class="text-center mt-3">
-                    <button id="resendSms" class="btn btn-link text-decoration-none">
+                    <button id="resendCode" class="btn btn-link text-decoration-none">
                         🔄 Отправить код повторно
                     </button>
                 </div>
@@ -43,31 +47,39 @@
 
 {% block extra_js %}
 <script>
-// Заполняем email из URL параметров или localStorage
+// Заполняем email и user_id из URL параметров или localStorage
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const email = urlParams.get('email') || localStorage.getItem('login_email');
-    
+    const user_id = urlParams.get('user_id') || localStorage.getItem('user_id');
+
     if (email) {
         document.getElementById('user_email').value = email;
         localStorage.setItem('login_email', email);
+    }
+
+    if (user_id) {
+        document.getElementById('user_id').value = user_id;
+        localStorage.setItem('user_id', user_id);
     }
 });
 
 document.getElementById('verify2faForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+
     const submitBtn = this.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
-    
+
     submitBtn.innerHTML = '⏳ Проверка...';
     submitBtn.disabled = true;
 
     const formData = new FormData(this);
     const data = {
-        email: formData.get('email'),
+        user_id: parseInt(formData.get('user_id')), // ✅ ВАЖНО: передаем user_id
         sms_code: formData.get('sms_code')
     };
+
+    console.log('📤 Отправка данных для 2FA:', data);
 
     try {
         const response = await fetch('/auth/verify-2fa', {
@@ -79,23 +91,26 @@ document.getElementById('verify2faForm').addEventListener('submit', async functi
         });
 
         const result = await response.json();
-        
+
         if (response.ok) {
             document.getElementById('result').innerHTML = `
                 <div class="alert alert-success">
                     <h5>✅ Вход выполнен!</h5>
-                    <p>Добро пожаловать!</p>
+                    <p>Добро пожаловать, ${result.username || 'пользователь'}!</p>
                 </div>
             `;
-            
+
             // Сохраняем токен и перенаправляем
             if (result.access_token) {
                 localStorage.setItem('auth_token', result.access_token);
+                localStorage.setItem('user_email', result.email);
+                localStorage.setItem('user_id', result.user_id);
+
                 setTimeout(() => {
                     window.location.href = '/dashboard';
                 }, 2000);
             }
-            
+
         } else {
             document.getElementById('result').innerHTML = `
                 <div class="alert alert-danger">
@@ -104,7 +119,7 @@ document.getElementById('verify2faForm').addEventListener('submit', async functi
                 </div>
             `;
         }
-        
+
     } catch (error) {
         document.getElementById('result').innerHTML = `
             <div class="alert alert-danger">
@@ -118,17 +133,22 @@ document.getElementById('verify2faForm').addEventListener('submit', async functi
     }
 });
 
-// Повторная отправка SMS
-document.getElementById('resendSms').addEventListener('click', async function() {
+// Повторная отправка кодов
+document.getElementById('resendCode').addEventListener('click', async function() {
     const email = document.getElementById('user_email').value;
-    
+
     if (!email) {
         alert('❌ Email не указан');
         return;
     }
 
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⏳ Отправка...';
+    btn.disabled = true;
+
     try {
-        const response = await fetch('/auth/resend-sms', {
+        const response = await fetch('/auth/resend-code', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -137,16 +157,38 @@ document.getElementById('resendSms').addEventListener('click', async function() 
         });
 
         const result = await response.json();
-        
+
         if (response.ok) {
-            alert('✅ Новый SMS код отправлен!');
+            alert('✅ Новые коды отправлены по SMS и Email!');
+
+            // Показываем тестовые коды в development
+            if (result.test_sms_code && result.test_email_code) {
+                document.getElementById('result').innerHTML = `
+                    <div class="alert alert-info">
+                        <h6>🔐 ТЕСТОВЫЙ РЕЖИМ</h6>
+                        <p><strong>SMS код:</strong> ${result.test_sms_code}</p>
+                        <p><strong>Email код:</strong> ${result.test_email_code}</p>
+                        <small class="text-muted">Используйте любой из этих кодов</small>
+                    </div>
+                `;
+            }
         } else {
             alert(`❌ ${result.detail || 'Ошибка отправки'}`);
         }
-        
+
     } catch (error) {
         alert('❌ Ошибка сети');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
     }
+});
+
+// Валидация кода подтверждения
+document.getElementById('sms_code').addEventListener('input', function(e) {
+    // Только цифры, максимум 6 символов
+    this.value = this.value.replace(/[^\d]/g, '').slice(0, 6);
 });
 </script>
 {% endblock %}
+

@@ -12,20 +12,17 @@ import secrets
 from src.config.settings import settings
 from src.database import models
 from src.database.postgres import get_db
+from src.services.email_service import email_service
 from src.services.sms_service import sms_service
 
 logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(
-    schemes=["argon2", "bcrypt"],  # Argon2 первый - без ограничений
+    schemes=["argon2", "bcrypt"],
     deprecated="auto",
-
-    # Настройки Argon2 (без ограничений по длине)
     argon2__time_cost=3,
     argon2__memory_cost=65536,
     argon2__parallelism=2,
-
-    # Настройки bcrypt (на всякий случай)
     bcrypt__rounds=12,
 )
 
@@ -83,7 +80,6 @@ from fastapi.security import OAuth2PasswordBearer
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="verify-2fa")
 
 
-# !!! Этот метод оставляем синхронным для зависимостей FastAPI !!!
 async def get_current_user(
         token: str = Depends(oauth2_scheme),
         db: AsyncSession = Depends(get_db)
@@ -108,7 +104,6 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    # Асинхронный запрос к БД
     result = await db.execute(
         select(models.User).where(models.User.id == int(user_id))
     )
@@ -136,8 +131,9 @@ async def authenticate_user(db: AsyncSession, email: str, secret_code: str):
     return user
 
 
-async def generate_and_send_sms_code(db: AsyncSession, user: models.User) -> str:
-    """Генерация и отправка SMS кода"""
+async def generate_and_send_verification_codes(db: AsyncSession, user: models.User) -> dict:
+    """Генерация и отправка кодов подтверждения по SMS и Email"""
+    # Генерируем единый код для обоих каналов
     code = ''.join(secrets.choice('0123456789') for _ in range(6))
     expires_at = datetime.now() + timedelta(minutes=settings.SMS_CODE_EXPIRE_MINUTES)
 
@@ -148,6 +144,7 @@ async def generate_and_send_sms_code(db: AsyncSession, user: models.User) -> str
         )
     )
 
+    # Сохраняем код в базу
     sms_code = models.SMSVerificationCode(
         user_id=user.id,
         phone=user.phone,
@@ -158,17 +155,31 @@ async def generate_and_send_sms_code(db: AsyncSession, user: models.User) -> str
     await db.commit()
     await db.refresh(sms_code)
 
-    # ✅ В development логируем и ВОЗВРАЩАЕМ код для тестирования
+    # ✅ ОТПРАВКА SMS
+    sms_success = await sms_service.send_verification_code(user.phone, code)
+
+    # ✅ ОТПРАВКА EMAIL
+    email_success = await email_service.send_verification_code_email(
+        to_email=user.email,
+        username=user.username,
+        verification_code=code
+    )
+
+    # Логируем для разработки
+    logger.info(f"🔐 Коды отправлены для {user.email}: SMS={sms_success}, Email={email_success}")
     print(f"📱 SMS код для {user.phone}: {code}")
-    logger.info(f"SMS код для {user.email} ({user.phone}): {code}")
+    print(f"📧 Email код для {user.email}: {code}")
 
-    # ✅ В production: await sms_service.send_verification_code(user.phone, code)
-
-    return code
+    return {
+        "sms_code": code,
+        "email_code": code,
+        "sms_sent": sms_success,
+        "email_sent": email_success
+    }
 
 
 async def verify_sms_code(db: AsyncSession, user_id: int, code: str):
-    """Верификация SMS кода"""
+    """Верификация кода подтверждения"""
     now = datetime.now()
 
     result = await db.execute(
@@ -191,6 +202,7 @@ async def verify_sms_code(db: AsyncSession, user_id: int, code: str):
 
     return False
 
+
 async def get_user_by_email(db: AsyncSession, email: str):
     """Получение пользователя по email"""
     result = await db.execute(
@@ -208,7 +220,7 @@ async def get_user_by_phone(db: AsyncSession, phone: str):
 
 
 async def cleanup_expired_sms_codes(db: AsyncSession):
-    """Очистка просроченных SMS кодов"""
+    """Очистка просроченных кодов"""
     now = datetime.now()
     result = await db.execute(
         select(models.SMSVerificationCode).where(
