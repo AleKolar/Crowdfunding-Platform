@@ -4,6 +4,8 @@ from sqlalchemy import select, and_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.database.models import Project
+
 ModelType = TypeVar("ModelType")
 CreateSchemaType = TypeVar("CreateSchemaType")
 UpdateSchemaType = TypeVar("UpdateSchemaType")
@@ -17,6 +19,24 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         stmt = select(self.model).where(self.model.id == id)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_all(
+            self,
+            db: AsyncSession,
+            skip: int = 0,
+            limit: int = 100
+    ) -> List[Project]:
+        """Получение всех проектов (базовый метод)"""
+        from sqlalchemy import select
+
+        query = select(self.model).where(
+            self.model.is_active == True
+        ).order_by(
+            self.model.created_at.desc()
+        ).offset(skip).limit(limit)
+
+        result = await db.execute(query)
+        return result.scalars().all()
 
     async def get_multi(
             self,

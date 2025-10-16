@@ -7,7 +7,6 @@ from src.config.settings import settings
 import logging
 from typing import Optional
 import re
-import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +22,9 @@ class EmailService:
         self.use_tls = settings.SMTP_USE_TLS
 
     def _create_smtp_connection(self) -> smtplib.SMTP:
-        """
-        Создание безопасного SMTP соединения
-        """
+        """Создание SMTP соединения"""
         try:
             context = ssl.create_default_context()
-            context.options |= ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1
-            context.minimum_version = ssl.TLSVersion.TLSv1_2
 
             if self.use_ssl:
                 server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, context=context)
@@ -44,15 +39,9 @@ class EmailService:
             logger.error(f"Ошибка создания SMTP соединения: {e}")
             raise
 
-    async def send_email(self,
-                         to_email: str,
-                         subject: str,
-                         html_content: str,
-                         text_content: Optional[str] = None) -> bool:
-        """
-        Отправка письма на Email пользователя
-        ВСЕГДА отправляем реальное письмо!
-        """
+    def send_email(self, to_email: str, subject: str, html_content: str,
+                   text_content: Optional[str] = None) -> bool:
+        """СИНХРОННАЯ отправка письма"""
         try:
             # Создаем сообщение
             message = MIMEMultipart("alternative")
@@ -60,20 +49,18 @@ class EmailService:
             message["From"] = self.smtp_from_email
             message["To"] = to_email
 
-            # Если не предоставлен текстовый контент, создаем упрощенную версию
             if not text_content:
-                # Простая текстовая версия HTML контента
-                text_content = re.sub(r'<[^<]+?>', '', html_content)  # Удаляем HTML теги
-                text_content = re.sub(r'\n\s*\n', '\n', text_content)  # Убираем лишние переносы
+                text_content_clean = re.sub(r'<[^<]+?>', '', html_content)
+                text_content_clean = re.sub(r'\n\s*\n', '\n', text_content_clean)
+            else:
+                text_content_clean = text_content
 
-            # Добавляем обе версии (текстовую и HTML)
-            part1 = MIMEText(text_content, "plain")
+            part1 = MIMEText(text_content_clean, "plain")
             part2 = MIMEText(html_content, "html")
-
             message.attach(part1)
             message.attach(part2)
 
-            # ВСЕГДА отправляем реальное письмо!
+            # Отправляем письмо
             with self._create_smtp_connection() as server:
                 server.login(self.smtp_username, self.smtp_password)
                 server.send_message(message)
@@ -81,77 +68,44 @@ class EmailService:
             logger.info(f"✅ Письмо отправлено на {to_email}: {subject}")
             return True
 
-        except smtplib.SMTPAuthenticationError as e:
-            logger.error(f"❌ Ошибка аутентификации SMTP: {e}")
-            return False
-        except smtplib.SMTPException as e:
-            logger.error(f"❌ Ошибка SMTP при отправке письма: {e}")
-            return False
         except Exception as e:
             logger.error(f"❌ Ошибка отправки письма: {e}")
             return False
 
-    async def send_welcome_email(self, to_email: str, username: str) -> bool:
-        """
-        Отправка приветственного письма
-        """
-        from src.services.template_service import template_service
-
-        subject = "🎉 Добро пожаловать в CrowdPlatform!"
-        html_content = template_service.render_email_template(
-            "welcome.html",
-            username=username,
-            platform_url=settings.PLATFORM_URL
-        )
-
-        return await self.send_email(to_email, subject, html_content)
-
-    async def send_password_reset_email(self, to_email: str, reset_token: str, username: str) -> bool:
-        """
-        Отправка письма для сброса пароля
-        """
-        from src.services.template_service import template_service
-
-        subject = "🔐 Сброс пароля CrowdPlatform"
-        reset_url = f"{settings.PLATFORM_URL}/reset-password?token={reset_token}"
-
-        html_content = template_service.render_email_template(
-            "password_reset.html",
-            username=username,
-            reset_url=reset_url,
-            reset_token=reset_token
-        )
-
-        return await self.send_email(to_email, subject, html_content)
-
-    async def send_verification_code_email(self, to_email: str, username: str, verification_code: str) -> bool:
-        """
-        Отправка кода подтверждения по email
-        """
-        from src.services.template_service import template_service
-
-        subject = "🔐 Код подтверждения для CrowdPlatform"
-        html_content = template_service.render_email_template(
-            "verification_code.html",
-            username=username,
-            verification_code=verification_code,
-            platform_url=settings.PLATFORM_URL
-        )
-
-        return await self.send_email(to_email, subject, html_content)
-
-    def test_connection(self) -> bool:
-        """
-        Тестирование подключения к SMTP серверу
-        """
+    def send_welcome_email(self, to_email: str, username: str) -> bool:
+        """Отправка приветственного письма"""
         try:
-            with self._create_smtp_connection() as server:
-                server.login(self.smtp_username, self.smtp_password)
-                logger.info("✅ SMTP соединение успешно установлено")
-                return True
+            from src.services.template_service import template_service
+
+            subject = "🎉 Добро пожаловать в CrowdPlatform!"
+            html_content = template_service.render_email_template(
+                "welcome_email.html",
+                username=username
+            )
+
+            return self.send_email(to_email, subject, html_content)
+
         except Exception as e:
-            logger.error(f"❌ Ошибка тестирования SMTP соединения: {e}")
+            logger.error(f"❌ Ошибка подготовки welcome email: {e}")
             return False
 
+    def send_verification_code_email(self, to_email: str, username: str, verification_code: str) -> bool:
+        """Отправка кода подтверждения"""
+        try:
+            from src.services.template_service import template_service
+
+            subject = "🔐 Код подтверждения для CrowdPlatform"
+            html_content = template_service.render_email_template(
+                "verification_code.html",
+                username=username,
+                verification_code=verification_code,
+                code_expire_minutes=getattr(settings, 'SMS_CODE_EXPIRE_MINUTES', 10)
+            )
+
+            return self.send_email(to_email, subject, html_content)
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка подготовки verification email: {e}")
+            return False
 
 email_service = EmailService()

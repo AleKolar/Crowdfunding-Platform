@@ -70,14 +70,18 @@ async def resend_verification_code(
     # Генерируем и отправляем новые коды по SMS и Email
     result = await generate_and_send_verification_codes(db, user)
 
+    # ✅ Для совместимости с фронтендом возвращаем оба ключа
+    verification_code = result["code"]
+
     return {
         "message": "Новые коды подтверждения отправлены по SMS и Email",
-        "test_sms_code": result["sms_code"],  # Для разработки
-        "test_email_code": result["email_code"],  # Для разработки
+        "test_sms_code": verification_code,
+        "test_email_code": verification_code,
+        "sms_sent": result["sms_sent"],
+        "email_sent": result["email_sent"],
         "user_phone": user.phone,
         "user_email": user.email
     }
-
 
 @auth_router.get("/me")
 async def get_me(current_user: models.User = Depends(get_current_user)):

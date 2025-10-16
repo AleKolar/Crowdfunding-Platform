@@ -1,8 +1,11 @@
 # src/endpoints/websocket.py
 from fastapi import WebSocket, WebSocketDisconnect
-from src.websocket.manager import manager
+
+
 from src.websocket.auth import authenticate_websocket
 from fastapi import APIRouter
+
+from src.websocket.handler import manager
 
 projects_web_router = APIRouter(prefix="/projects", tags=["projects"])
 

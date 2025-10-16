@@ -31,6 +31,7 @@ from src.endpoints.payments import payments_router
 from src.endpoints.projects import projects_router
 from src.endpoints.websocket import projects_web_router
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 limiter = Limiter(key_func=get_remote_address)
@@ -39,9 +40,10 @@ limiter = Limiter(key_func=get_remote_address)
 if os.getenv("ENVIRONMENT") == "development" and os.path.exists("./openapi.json"):
     os.remove("./openapi.json")
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup events
+
     print("🚀 Запуск приложения...")
 
     try:
@@ -51,20 +53,24 @@ async def lifespan(app: FastAPI):
         print("✅ Redis подключен успешно")
     except Exception as e:
         print(f"❌ Ошибка подключения к Redis: {e}")
-        if os.getenv("ENVIRONMENT") == "production":
-            raise
 
     try:
-        # 2. Создание таблиц (только для разработки)
-        if os.getenv("ENVIRONMENT") == "development":
+        # 2. Создание таблиц (для разработки по умолчанию)
+        environment = os.getenv("ENVIRONMENT", "development")  # ✅ По умолчанию development
+        print(f"🔧 Текущее окружение: {environment}")
+
+        if environment != "production":
             print("🔄 Создание таблиц БД...")
-            await create_tables() # ❌ Только для разработки !!!
-            print("✅ Таблицы созданы (development mode)")
+            await create_tables()
+            print("✅ Таблицы созданы")
+        else:
+            print("ℹ️  Пропуск создания таблиц (production mode)")
 
         print("✅ Все системы инициализированы")
 
     except Exception as e:
-        print(f"⚠️  Предупреждение при инициализации: {e}")
+        print(f"❌ Ошибка при создании таблиц: {e}")
+        # Не прерываем запуск, но логируем ошибку
 
     yield
 

@@ -1,0 +1,36 @@
+<!-- src/templates/emails/welcome.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>Добро пожаловать!</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { background: #4F46E5; color: white; padding: 20px; text-align: center; }
+        .content { padding: 30px; }
+        .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; background: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Добро пожаловать!</h1>
+        </div>
+        <div class="content">
+            <p>Здравствуйте, <strong>{{ username }}</strong>!</p>
+            <p>Мы рады приветствовать вас в CrowdPlatform!</p>
+            <p>Теперь вы можете:</p>
+            <ul>
+                <li>Создавать краудфандинговые кампании</li>
+                <li>Поддерживать интересные проекты</li>
+                <li>Взаимодействовать с сообществом</li>
+            </ul>
+            <p>Если у вас возникнут вопросы, обращайтесь в службу поддержки.</p>
+        </div>
+        <div class="footer">
+            <p>CrowdPlatform &copy; 2024</p>
+        </div>
+    </div>
+</body>
+</html>

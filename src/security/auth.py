@@ -12,7 +12,6 @@ import secrets
 from src.config.settings import settings
 from src.database import models
 from src.database.postgres import get_db
-from src.services.email_service import email_service
 from src.services.sms_service import sms_service
 
 logger = logging.getLogger(__name__)
@@ -26,16 +25,13 @@ pwd_context = CryptContext(
     bcrypt__rounds=12,
 )
 
-
 def get_password_hash(password: str) -> str:
     """Хеширование пароля"""
     return pwd_context.hash(password)
 
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Проверка пароля"""
     return pwd_context.verify(plain_password, hashed_password)
-
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -58,7 +54,6 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     )
     return encoded_jwt
 
-
 def verify_token(token: str):
     try:
         payload = jwt.decode(
@@ -74,11 +69,9 @@ def verify_token(token: str):
             detail=f"Invalid token: {str(e)}",
         )
 
-
 from fastapi.security import OAuth2PasswordBearer
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="verify-2fa")
-
 
 async def get_current_user(
         token: str = Depends(oauth2_scheme),
@@ -116,67 +109,87 @@ async def get_current_user(
 
 async def authenticate_user(db: AsyncSession, email: str, secret_code: str):
     """Аутентификация пользователя по email и секретному коду"""
+    logger.info(f"🔐 AUTH: Searching user by email: {email}")
+
     result = await db.execute(
         select(models.User).where(models.User.email == email)
     )
     user = result.scalar_one_or_none()
 
     if not user:
+        logger.warning(f"🔐 AUTH: User not found with email: {email}")
         return False
 
-    # ПРЯМОЕ СРАВНЕНИЕ! Не хэшируем!
+    logger.info(f"🔐 AUTH: User found: {user.id}, checking secret code...")
+
     if user.secret_code != secret_code:
+        logger.warning(f"🔐 AUTH: Invalid secret code for user {user.id}")
         return False
 
+    logger.info(f"🔐 AUTH: User {user.id} authenticated successfully")
     return user
 
 
 async def generate_and_send_verification_codes(db: AsyncSession, user: models.User) -> dict:
-    """Генерация и отправка кодов подтверждения по SMS и Email"""
-    # Генерируем единый код для обоих каналов
-    code = ''.join(secrets.choice('0123456789') for _ in range(6))
-    expires_at = datetime.now() + timedelta(minutes=settings.SMS_CODE_EXPIRE_MINUTES)
+    """Генерация и отправка кодов подтверждения через Celery"""
+    try:
+        # Генерируем код
+        code = ''.join(secrets.choice('0123456789') for _ in range(6))
+        expires_at = datetime.now() + timedelta(minutes=settings.SMS_CODE_EXPIRE_MINUTES)
 
-    # Удаляем старые коды пользователя
-    await db.execute(
-        delete(models.SMSVerificationCode).where(
-            models.SMSVerificationCode.user_id == user.id
+        logger.info(f"🔐 Generating verification code for {user.email}: {code}")
+
+        # Сохраняем код в базу
+        await db.execute(
+            delete(models.SMSVerificationCode).where(
+                models.SMSVerificationCode.user_id == user.id
+            )
         )
-    )
 
-    # Сохраняем код в базу
-    sms_code = models.SMSVerificationCode(
-        user_id=user.id,
-        phone=user.phone,
-        code=code,
-        expires_at=expires_at
-    )
-    db.add(sms_code)
-    await db.commit()
-    await db.refresh(sms_code)
+        sms_code = models.SMSVerificationCode(
+            user_id=user.id,
+            phone=user.phone,
+            code=code,
+            expires_at=expires_at
+        )
+        db.add(sms_code)
+        await db.commit()
 
-    # ✅ ОТПРАВКА SMS
-    sms_success = await sms_service.send_verification_code(user.phone, code)
+        # ✅ ОТЛАДОЧНОЕ ЛОГИРОВАНИЕ
+        logger.info(f"🎯 START: generate_and_send_verification_codes for {user.email}")
+        logger.info(f"🔢 Generated code: {code}")
 
-    # ✅ ОТПРАВКА EMAIL
-    email_success = await email_service.send_verification_code_email(
-        to_email=user.email,
-        username=user.username,
-        verification_code=code
-    )
+        # ✅ EMAIL ЧЕРЕЗ CELERY С .delay()
+        from src.tasks.tasks import send_verification_codes_task
 
-    # Логируем для разработки
-    logger.info(f"🔐 Коды отправлены для {user.email}: SMS={sms_success}, Email={email_success}")
-    print(f"📱 SMS код для {user.phone}: {code}")
-    print(f"📧 Email код для {user.email}: {code}")
+        logger.info(f"🚀 CALLING: send_verification_codes_task.delay() for {user.email}")
 
-    return {
-        "sms_code": code,
-        "email_code": code,
-        "sms_sent": sms_success,
-        "email_sent": email_success
-    }
+        send_verification_codes_task.delay(
+            user_email=user.email,
+            username=user.username,
+            verification_code=code
+        )
 
+        logger.info(f"✅ FINISH: generate_and_send_verification_codes completed for {user.email}")
+
+        # ✅ SMS
+        sms_success = False
+        if user.phone:
+            sms_success = await sms_service.send_verification_code(user.phone, code)
+
+        logger.info(f"📧 Email task sent to Celery for {user.email}")
+        logger.info(f"📱 SMS sent: {sms_success}")
+
+        return {
+            "sms_sent": sms_success,
+            "email_sent": True,
+            "code": code
+        }
+
+    except Exception as e:
+        logger.error(f"💥 Error in generate_and_send_verification_codes: {e}")
+        await db.rollback()
+        return {"sms_sent": False, "email_sent": False}
 
 async def verify_sms_code(db: AsyncSession, user_id: int, code: str):
     """Верификация кода подтверждения"""
@@ -202,7 +215,6 @@ async def verify_sms_code(db: AsyncSession, user_id: int, code: str):
 
     return False
 
-
 async def get_user_by_email(db: AsyncSession, email: str):
     """Получение пользователя по email"""
     result = await db.execute(
@@ -210,14 +222,12 @@ async def get_user_by_email(db: AsyncSession, email: str):
     )
     return result.scalar_one_or_none()
 
-
 async def get_user_by_phone(db: AsyncSession, phone: str):
     """Получение пользователя по телефону"""
     result = await db.execute(
         select(models.User).where(models.User.phone == phone)
     )
     return result.scalar_one_or_none()
-
 
 async def cleanup_expired_sms_codes(db: AsyncSession):
     """Очистка просроченных кодов"""

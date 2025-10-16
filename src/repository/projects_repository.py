@@ -18,7 +18,7 @@ class ProjectsRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             skip: int = 0,
             limit: int = 100
     ) -> List[Project]:
-        # Упрощенная версия
+        """ Получение проектов создателя """
         return await self.get_by_field(
             db,
             field_name='creator_id',
@@ -39,21 +39,33 @@ class ProjectsRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             min_goal: Optional[float] = None,
             max_goal: Optional[float] = None
     ) -> List[Project]:
-        # Используем get_multi с фильтрами
-        filters = {}
-        if category: filters['category'] = category
-        if status: filters['status'] = status
-        if is_featured is not None: filters['is_featured'] = is_featured
+        """Исправленная версия с правильной фильтрацией в БД"""
+        from sqlalchemy import and_, select
 
-        projects = await self.get_multi(db, skip=skip, limit=limit, **filters)
+        # Начинаем с базового запроса
+        conditions = []
 
-        # Дополнительная фильтрация по диапазону (не поддерживается get_multi)
+        # Добавляем условия фильтрации
+        if category:
+            conditions.append(self.model.category == category)
+        if status:
+            conditions.append(self.model.status == status)
+        if is_featured is not None:
+            conditions.append(self.model.is_featured == is_featured)
         if min_goal is not None:
-            projects = [p for p in projects if p.goal_amount >= min_goal]
+            conditions.append(self.model.goal_amount >= min_goal)
         if max_goal is not None:
-            projects = [p for p in projects if p.goal_amount <= max_goal]
+            conditions.append(self.model.goal_amount <= max_goal)
 
-        return projects
+        # Собираем запрос
+        stmt = select(self.model)
+        if conditions:
+            stmt = stmt.where(and_(*conditions))
+
+        stmt = stmt.order_by(self.model.created_at.desc()).offset(skip).limit(limit)
+
+        result = await db.execute(stmt)
+        return result.scalars().all()
 
     async def search(
             self,

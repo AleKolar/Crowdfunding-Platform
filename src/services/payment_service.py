@@ -213,7 +213,7 @@ class PaymentService:
         except ValueError as e:
             logger.error(f"Invalid payload: {e}")
             raise HTTPException(status_code=400, detail="Invalid payload")
-        except stripe._error.SignatureVerificationError as e:
+        except stripe.error.SignatureVerificationError as e:
             logger.error(f"Invalid signature: {e}")
             raise HTTPException(status_code=400, detail="Invalid signature")
 

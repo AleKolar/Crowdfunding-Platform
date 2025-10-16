@@ -322,3 +322,15 @@ class ProjectService:
             raise HTTPException(status_code=404, detail="News not found")
 
         return {"message": "News deleted successfully"}
+
+    @classmethod
+    async def get_user_projects(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[ProjectResponse]:
+        """Получение проектов пользователя"""
+        projects = await projects_repository.get_by_creator(db, user_id, skip, limit)
+        return cls.to_response_list(projects)

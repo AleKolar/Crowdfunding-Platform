@@ -15,7 +15,6 @@
 
                 <form id="verify2faForm">
                     <input type="hidden" id="user_email" name="email">
-                    <input type="hidden" id="user_id" name="user_id">
 
                     <div class="mb-4">
                         <label for="sms_code" class="form-label">🔐 Код подтверждения (6 цифр)</label>
@@ -47,20 +46,14 @@
 
 {% block extra_js %}
 <script>
-// Заполняем email и user_id из URL параметров или localStorage
+// Заполняем email из URL параметров или localStorage
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const email = urlParams.get('email') || localStorage.getItem('login_email');
-    const user_id = urlParams.get('user_id') || localStorage.getItem('user_id');
 
     if (email) {
         document.getElementById('user_email').value = email;
         localStorage.setItem('login_email', email);
-    }
-
-    if (user_id) {
-        document.getElementById('user_id').value = user_id;
-        localStorage.setItem('user_id', user_id);
     }
 });
 
@@ -75,11 +68,9 @@ document.getElementById('verify2faForm').addEventListener('submit', async functi
 
     const formData = new FormData(this);
     const data = {
-        user_id: parseInt(formData.get('user_id')), // ✅ ВАЖНО: передаем user_id
+        email: formData.get('email'),
         sms_code: formData.get('sms_code')
     };
-
-    console.log('📤 Отправка данных для 2FA:', data);
 
     try {
         const response = await fetch('/auth/verify-2fa', {
@@ -96,16 +87,13 @@ document.getElementById('verify2faForm').addEventListener('submit', async functi
             document.getElementById('result').innerHTML = `
                 <div class="alert alert-success">
                     <h5>✅ Вход выполнен!</h5>
-                    <p>Добро пожаловать, ${result.username || 'пользователь'}!</p>
+                    <p>Добро пожаловать!</p>
                 </div>
             `;
 
             // Сохраняем токен и перенаправляем
             if (result.access_token) {
                 localStorage.setItem('auth_token', result.access_token);
-                localStorage.setItem('user_email', result.email);
-                localStorage.setItem('user_id', result.user_id);
-
                 setTimeout(() => {
                     window.location.href = '/dashboard';
                 }, 2000);
@@ -182,12 +170,6 @@ document.getElementById('resendCode').addEventListener('click', async function()
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
-});
-
-// Валидация кода подтверждения
-document.getElementById('sms_code').addEventListener('input', function(e) {
-    // Только цифры, максимум 6 символов
-    this.value = this.value.replace(/[^\d]/g, '').slice(0, 6);
 });
 </script>
 {% endblock %}

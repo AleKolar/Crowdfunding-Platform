@@ -45,6 +45,7 @@ git push origin main
 
 # Ручной запуск приложения
 # celery -A src.tasks.celery_app worker --loglevel=info --pool=solo
+
 # celery -A src.tasks.celery_app beat --loglevel=info
 
 # uvicorn main:app --host 127.0.0.1 --port 8000 --reload

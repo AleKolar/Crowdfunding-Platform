@@ -193,10 +193,8 @@ def mock_sms_sending():
 def mock_celery_tasks():
     """Мокаем Celery задачи"""
     with patch('src.tasks.tasks.create_platform_notification.delay') as mock_platform, \
-         patch('src.tasks.tasks.send_websocket_notification.delay') as mock_websocket, \
          patch('src.tasks.tasks.send_verification_codes_task.delay') as mock_verification:
         mock_platform.return_value = None
-        mock_websocket.return_value = None
         mock_verification.return_value = None
         yield
 

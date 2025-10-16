@@ -41,5 +41,4 @@ class SMSService:
             return False
 
 
-# Синглтон сервиса
 sms_service = SMSService()

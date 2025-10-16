@@ -44,11 +44,9 @@ class TestNotificationsCorrect:
         required_tasks = [
             'send_webinar_reminders',
             'send_welcome_email',
-            'send_verification_codes',
             'process_email_queue',
             'cleanup_old_data',
             'create_platform_notification',
-            'send_websocket_notification',
             'send_verification_codes_task'
         ]
 

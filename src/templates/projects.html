@@ -1,0 +1,249 @@
+<!-- templates/projects.html -->
+{% extends "base.html" %}
+
+{% block title %}Проекты - Crowdfunding{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>🚀 Все проекты</h1>
+    <button class="btn btn-primary" onclick="showCreateProjectModal()">➕ Создать проект</button>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+              <label for="search-input"></label><input type="text" class="form-control" id="search-input" placeholder="Поиск проектов...">
+            </div>
+            <div class="col-md-3">
+              <label for="category-filter"></label><select class="form-select" id="category-filter">
+                    <option value="">Все категории</option>
+                    <option value="technology">Технологии</option>
+                    <option value="art">Искусство</option>
+                    <option value="business">Бизнес</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+              <label for="status-filter"></label><select class="form-select" id="status-filter">
+                    <option value="">Все статусы</option>
+                    <option value="active">Активные</option>
+                    <option value="completed">Завершенные</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-outline-secondary w-100" onclick="loadProjects()">🔍 Применить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список проектов -->
+<div id="projects-container">
+    <div class="text-center py-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+        </div>
+        <p class="mt-2">Загружаем проекты...</p>
+    </div>
+</div>
+
+<!-- Модальное окно создания проекта -->
+<div class="modal fade" id="createProjectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Создать новый проект</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="create-project-form">
+                    <div class="mb-3">
+                        <label class="form-label">Название проекта</label>
+                      <label>
+                        <input type="text" class="form-control" name="title" required>
+                      </label>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                      <label>
+                        <textarea class="form-control" name="description" rows="3" required></textarea>
+                      </label>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Целевая сумма</label>
+                      <label>
+                        <input type="number" class="form-control" name="goal_amount" min="1" required>
+                      </label>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Категория</label>
+                      <label>
+                        <select class="form-select" name="category" required>
+                            <option value="technology">Технологии</option>
+                            <option value="art">Искусство</option>
+                            <option value="business">Бизнес</option>
+                        </select>
+                      </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="createProject()">Создать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let allProjects = [];
+
+async function loadProjects() {
+    try {
+        const search = document.getElementById('search-input').value;
+        const category = document.getElementById('category-filter').value;
+        const status = document.getElementById('status-filter').value;
+
+        let url = `${API_BASE}/projects/`;
+        const params = new URLSearchParams();
+
+        if (search) params.append('query', search);
+        if (category) params.append('category', category);
+        if (status) params.append('status', status);
+
+        if (params.toString()) url += `?${params.toString()}`;
+
+        const response = await makeAuthenticatedRequest(url);
+
+        if (response.ok) {
+            allProjects = await response.json();
+            renderProjects(allProjects);
+        } else {
+            showError('Ошибка загрузки проектов');
+        }
+    } catch (error) {
+        showError(error.message);
+    }
+}
+
+function renderProjects(projects) {
+    const container = document.getElementById('projects-container');
+
+    if (projects.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <h4>😔 Проекты не найдены</h4>
+                <p>Попробуйте изменить параметры поиска</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = projects.map(project => `
+        <div class="card mb-3 project-card" onclick="openProject(${project.id})" style="cursor: pointer;">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5 class="card-title">${project.title}</h5>
+                        <p class="card-text text-muted">${project.description}</p>
+                        <div class="d-flex gap-3 text-sm">
+                            <span class="badge bg-primary">${project.category}</span>
+                            <span class="badge bg-${project.status === 'active' ? 'success' : 'secondary'}">${project.status}</span>
+                            <span>🎯 ${project.goal_amount} ₽</span>
+                            <span>👁️ ${project.views || 0}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="btn-group">
+                            <button class="btn btn-outline-primary btn-sm" onclick="event.stopPropagation(); likeProject(${project.id})">
+                                ❤️ ${project.likes_count || 0}
+                            </button>
+                            <button class="btn btn-outline-success btn-sm" onclick="event.stopPropagation(); donateToProject(${project.id})">
+                                💰 Донат
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function showCreateProjectModal() {
+    if (!authToken) {
+        alert('Сначала войдите в систему!');
+        return;
+    }
+    new bootstrap.Modal(document.getElementById('createProjectModal')).show();
+}
+
+async function createProject() {
+    try {
+        const form = document.getElementById('create-project-form');
+        const formData = new FormData(form);
+
+        const projectData = {
+            title: formData.get('title'),
+            description: formData.get('description'),
+            goal_amount: parseFloat(formData.get('goal_amount')),
+            category: formData.get('category')
+        };
+
+        const response = await makeAuthenticatedRequest(`${API_BASE}/projects/`, {
+            method: 'POST',
+            body: JSON.stringify(projectData)
+        });
+
+        if (response.ok) {
+            const project = await response.json();
+            bootstrap.Modal.getInstance(document.getElementById('createProjectModal')).hide();
+            showSuccess('Проект создан!');
+            loadProjects(); // Перезагружаем список
+        } else {
+            const error = await response.json();
+            showError(error.detail);
+        }
+    } catch (error) {
+        showError(error.message);
+    }
+}
+
+function openProject(projectId) {
+    window.location.href = `/project/${projectId}`;
+}
+
+async function likeProject(projectId) {
+    try {
+        const response = await makeAuthenticatedRequest(`${API_BASE}/projects/${projectId}/like`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            showSuccess('Лайк поставлен!');
+            loadProjects(); // Обновляем счетчики
+        } else {
+            const error = await response.json();
+            showError(error.detail);
+        }
+    } catch (error) {
+        showError(error.message);
+    }
+}
+
+// Загружаем проекты при открытии страницы
+document.addEventListener('DOMContentLoaded', function() {
+    if (authToken) {
+        loadProjects();
+    } else {
+        document.getElementById('projects-container').innerHTML = `
+            <div class="text-center py-5">
+                <h4>🔐 Требуется авторизация</h4>
+                <p>Войдите в систему для просмотра проектов</p>
+                <button class="btn btn-primary" onclick="window.location.href='/dashboard'">Войти</button>
+            </div>
+        `;
+    }
+});
+</script>
+{% endblock %}

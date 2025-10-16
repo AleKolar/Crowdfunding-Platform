@@ -33,10 +33,8 @@ class SyncWebinarRepository:
 
         webinars = db.scalars(
             select(models.Webinar).where(
-                and_(
-                    models.Webinar.scheduled_at.between(now, reminder_start),
-                    models.Webinar.reminder_sent == False
-                )
+                models.Webinar.scheduled_at.between(now, reminder_start),
+                models.Webinar.status == "scheduled"
             )
         ).all()
 

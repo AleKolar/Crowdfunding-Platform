@@ -22,6 +22,7 @@ try:
     from livekit.api.access_token import VideoGrants
 
     LIVEKIT_AVAILABLE = True
+    logger.info("✅ LiveKit successfully imported")
 except ImportError:
     logger.warning("LiveKit not available, using mock implementation")
     from src.services.mocks.livekit_mock import AccessToken, VideoGrants
@@ -34,25 +35,33 @@ class WebinarService:
         if LIVEKIT_AVAILABLE:
             self.api_key = settings.LIVEKIT_API_KEY
             self.api_secret = settings.LIVEKIT_API_SECRET
+            logger.info("LiveKit configured with API key")
         else:
             self.api_key = "mock_api_key"
             self.api_secret = "mock_api_secret"
             logger.info("Using mock LiveKit implementation")
 
-    def create_webinar_room(self, webinar_id: int, title: str) -> tuple[str, str]:
-        """Создание комнаты для вебинара"""
+    def _create_livekit_room(self, webinar_id: int, title: str) -> tuple[str, str]:
+        """Создание комнаты LiveKit и токена для создателя"""
         room_name = f"webinar_{webinar_id}"
 
         grants = VideoGrants()
         grants.room_create = True
         grants.room_join = True
         grants.room = room_name
-        grants.can_publish = True
+        grants.can_publish = True  # Создатель может публиковать
         grants.can_subscribe = True
         grants.can_publish_data = True
-        grants.room_admin = True
+        grants.room_admin = True  # Администратор комнаты
         grants.hidden = False
-        grants.recorder = False
+
+        # Дополнительные права для создателя
+        try:
+            grants.recorder = True  # Может записывать вебинар
+        except AttributeError:
+            logger.debug("recorder attribute not available")
+
+        logger.info(f"🎯 Creating LiveKit room: {room_name} for webinar {webinar_id}")
 
         token = (
             AccessToken(api_key=self.api_key, api_secret=self.api_secret)
@@ -63,27 +72,70 @@ class WebinarService:
         )
 
         creator_token = token.to_jwt()
+        logger.info(f"✅ LiveKit room '{room_name}' created successfully")
         return room_name, creator_token
 
-    def generate_participant_token(self, webinar_id: int, user_id: int, username: str = None) -> str:
-        """Генерация токена для участника"""
+    def generate_participant_token(self, webinar_id: int, user_id: int, username: str = None,
+                                   can_publish: bool = True) -> str:
+        """Генерация токена для участника
+
+        Args:
+            webinar_id: ID вебинара
+            user_id: ID пользователя
+            username: Имя пользователя (опционально)
+            can_publish: Может ли участник публиковать видео/аудио (по умолчанию ДА)
+        """
         room_name = f"webinar_{webinar_id}"
         participant_name = username or f"User {user_id}"
 
         grants = VideoGrants()
         grants.room_join = True
         grants.room = room_name
-        grants.can_publish = False
+        grants.can_publish = can_publish  # Участники МОГУТ публиковать по умолчанию
         grants.can_subscribe = True
-        grants.can_publish_data = True
-        grants.room_admin = False
+        grants.can_publish_data = True  # Могут отправлять сообщения в чат
+        grants.room_admin = False  # Не администраторы
         grants.hidden = False
-        grants.recorder = False
+
+        logger.debug(
+            f"🎫 Generating participant token for user {user_id} in room '{room_name}' (can_publish={can_publish})")
 
         token = (
             AccessToken(api_key=self.api_key, api_secret=self.api_secret)
             .with_identity(f"user_{user_id}")
             .with_name(participant_name)
+            .with_grants(grants)
+            .with_ttl(timedelta(hours=3))
+        )
+
+        return token.to_jwt()
+
+    def generate_creator_token(self, webinar_id: int, creator_id: int, title: str) -> str:
+        """Генерация токена для создателя вебинара (администратора)"""
+        room_name = f"webinar_{webinar_id}"
+
+        grants = VideoGrants()
+        grants.room_join = True
+        grants.room = room_name
+        grants.can_publish = True  # Может публиковать
+        grants.can_subscribe = True
+        grants.can_publish_data = True
+        grants.room_admin = True  # Администраторские права
+        grants.hidden = False
+
+        # Максимальные права для создателя
+        try:
+            grants.room_create = True  # Может создавать комнаты
+            grants.recorder = True  # Может записывать
+        except AttributeError:
+            logger.debug("Some admin attributes not available")
+
+        logger.info(f"👑 Generating creator token for user {creator_id} in room '{room_name}'")
+
+        token = (
+            AccessToken(api_key=self.api_key, api_secret=self.api_secret)
+            .with_identity(f"creator_{creator_id}")
+            .with_name(f"Creator - {title}")
             .with_grants(grants)
             .with_ttl(timedelta(hours=3))
         )
@@ -101,11 +153,13 @@ class WebinarService:
             max_participants: int = 100,
             is_public: bool = True,
             meta_data: Optional[Dict[str, Any]] = None
-
     ) -> models.Webinar:
-        """Создание вебинара с проверкой прав"""
+        """Создание вебинара с автоматическим созданием комнаты LiveKit"""
         try:
-            # Создаем вебинар
+            # 1. СОЗДАЕМ КОМНАТУ LIVEKIT ПЕРВОЙ
+            logger.info(f"🚀 Starting webinar creation: '{title}' by user {creator_id}")
+
+            # Временно создаем вебинар для получения ID
             webinar = models.Webinar(
                 title=title,
                 description=description,
@@ -118,10 +172,40 @@ class WebinarService:
             )
 
             db.add(webinar)
+            await db.flush()  # Получаем ID без коммита
+            logger.info(f"📝 Webinar record created with ID: {webinar.id}")
+
+            # 2. СОЗДАЕМ КОМНАТУ LIVEKIT
+            try:
+                room_name, creator_token = self._create_livekit_room(webinar.id, title)
+
+                # Сохраняем информацию о комнате в meta_data
+                webinar.meta_data = {
+                    **(webinar.meta_data or {}),
+                    'livekit_room': room_name,
+                    'creator_token': creator_token,  # Сохраняем токен создателя
+                    'room_created_at': datetime.now().isoformat(),
+                    'livekit_available': True
+                }
+
+                logger.info(f"✅ LiveKit room '{room_name}' created for webinar {webinar.id}")
+
+            except Exception as e:
+                logger.error(f"❌ Failed to create LiveKit room for webinar {webinar.id}: {e}")
+                # Сохраняем информацию об ошибке
+                webinar.meta_data = {
+                    **(webinar.meta_data or {}),
+                    'livekit_error': str(e),
+                    'livekit_available': False,
+                    'room_created_at': datetime.now().isoformat()
+                }
+                # Не прерываем создание вебинара из-за ошибки LiveKit
+
+            # 3. ФИНАЛИЗИРУЕМ СОЗДАНИЕ ВЕБИНАРА
             await db.commit()
             await db.refresh(webinar)
 
-            # Создаем анонс в Redis
+            # 4. СОЗДАЕМ АНОНС В REDIS
             announcement_data = {
                 'id': webinar.id,
                 'title': webinar.title,
@@ -129,18 +213,26 @@ class WebinarService:
                 'scheduled_at': webinar.scheduled_at.isoformat(),
                 'duration': webinar.duration,
                 'max_participants': webinar.max_participants,
-                'creator_id': webinar.creator_id
+                'creator_id': webinar.creator_id,
+                'livekit_room': webinar.meta_data.get('livekit_room', ''),
+                'livekit_available': webinar.meta_data.get('livekit_available', False)
             }
 
             notification_service.create_webinar_announcement(announcement_data)
 
-            logger.info(f"Webinar created: {webinar.id} by user {creator_id}")
+            logger.info(f"🎉 Webinar fully created: {webinar.id} by user {creator_id}")
+            logger.info(f"   - Room: {webinar.meta_data.get('livekit_room', 'NOT_CREATED')}")
+            logger.info(f"   - LiveKit available: {webinar.meta_data.get('livekit_available', False)}")
+
             return webinar
 
         except Exception as e:
             await db.rollback()
-            logger.error(f"Error creating webinar: {e}")
-            raise
+            logger.error(f"💥 Error creating webinar: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create webinar: {str(e)}"
+            )
 
     async def update_webinar(
             self,
@@ -151,6 +243,8 @@ class WebinarService:
     ) -> Optional[models.Webinar]:
         """Обновление вебинара с проверкой прав"""
         try:
+            logger.info(f"🔄 Updating webinar {webinar_id} by user {updater_id}")
+
             # Получаем вебинар
             result = await db.execute(
                 select(models.Webinar).where(models.Webinar.id == webinar_id)
@@ -158,6 +252,7 @@ class WebinarService:
             webinar = result.scalar_one_or_none()
 
             if not webinar:
+                logger.warning(f"Webinar {webinar_id} not found for update")
                 return None
 
             # Проверяем права (только создатель или админ может редактировать)
@@ -172,6 +267,7 @@ class WebinarService:
             )
 
             if not can_edit:
+                logger.warning(f"User {updater_id} doesn't have permission to edit webinar {webinar_id}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not enough permissions to edit this webinar"
@@ -181,6 +277,7 @@ class WebinarService:
             for field, value in update_data.items():
                 if hasattr(webinar, field):
                     setattr(webinar, field, value)
+                    logger.debug(f"Updated field {field} for webinar {webinar_id}")
 
             webinar.updated_at = datetime.now()
             await db.commit()
@@ -194,7 +291,9 @@ class WebinarService:
                 'scheduled_at': webinar.scheduled_at.isoformat(),
                 'duration': webinar.duration,
                 'max_participants': webinar.max_participants,
-                'creator_id': webinar.creator_id
+                'creator_id': webinar.creator_id,
+                'livekit_room': webinar.meta_data.get('livekit_room', ''),
+                'livekit_available': webinar.meta_data.get('livekit_available', False)
             }
 
             # Удаляем старый анонс и создаем новый
@@ -203,11 +302,12 @@ class WebinarService:
 
             notification_service.create_webinar_announcement(announcement_data)
 
+            logger.info(f"✅ Webinar {webinar_id} updated successfully")
             return webinar
 
         except Exception as e:
             await db.rollback()
-            logger.error(f"Error updating webinar: {e}")
+            logger.error(f"Error updating webinar {webinar_id}: {e}")
             raise
 
     async def send_webinar_invitations(
@@ -375,38 +475,60 @@ class WebinarService:
             </div>
             """
 
-    async def join_webinar(self, db: AsyncSession, webinar_id: int, user_id: int) -> Dict[str, Any]:
-        """Присоединение к вебинару"""
+    async def join_webinar(self, db: AsyncSession, webinar_id: int, user_id: int, is_creator: bool = False) -> Dict[
+        str, Any]:
+        """Присоединение к вебинару
+
+        Args:
+            is_creator: Если True - генерирует токен создателя
+        """
         try:
             registration = await webinar_repository.get_user_registration(db, webinar_id, user_id)
 
-            if not registration:
+            if not registration and not is_creator:
                 return {"success": False, "message": "Вы не зарегистрированы на этот вебинар"}
 
-            webinar = registration.webinar
+            webinar = await webinar_repository.get_webinar_by_id(db, webinar_id)
+            if not webinar:
+                return {"success": False, "message": "Вебинар не найден"}
 
             user = await user_repository.get_user_by_id(db, user_id)
 
             # Проверяем время вебинара (разрешаем присоединиться за 15 минут до начала)
             time_diff = (webinar.scheduled_at - datetime.now()).total_seconds()
-            if time_diff > 900:  # 15 минут
+            if time_diff > 900 and not is_creator:  # 15 минут
                 return {"success": False, "message": "Вебинар еще не начался"}
 
-            # Генерируем токен
-            participant_token = self.generate_participant_token(webinar_id, user_id, user.username if user else None)
+            # Генерируем токен в зависимости от роли
+            if is_creator:
+                # Создатель получает администраторские права
+                participant_token = self.generate_creator_token(webinar_id, user_id, webinar.title)
+                role = "creator"
+            else:
+                # Участники получают стандартные права (могут публиковать)
+                participant_token = self.generate_participant_token(
+                    webinar_id,
+                    user_id,
+                    user.username if user else None,
+                    can_publish=True  # Участники МОГУТ публиковать по умолчанию
+                )
+                role = "participant"
 
-            # ✅ ИСПОЛЬЗУЕМ РЕПОЗИТОРИЙ ДЛЯ ОТМЕТКИ ПРИСУТСТВИЯ
-            await webinar_repository.mark_attended(db, webinar_id, user_id)
+            # Отмечаем присутствие (если не создатель)
+            if not is_creator:
+                await webinar_repository.mark_attended(db, webinar_id, user_id)
 
             # Создаем уведомление о присоединении
-            await self._create_join_notification(db, user_id, webinar)
+            await self._create_join_notification(db, user_id, webinar, role)
 
             return {
                 "success": True,
                 "token": participant_token,
                 "join_url": f"{settings.PLATFORM_URL}/webinars/{webinar_id}/room",
                 "message": "Вы успешно присоединились к вебинару!",
-                "webinar_title": webinar.title
+                "webinar_title": webinar.title,
+                "role": role,
+                "can_publish": True  # Все участники могут публиковать
             }
 
         except Exception as e:
@@ -414,27 +536,45 @@ class WebinarService:
             logger.error(f"Error joining webinar: {e}")
             return {"success": False, "message": "Ошибка присоединения к вебинару"}
 
-    async def _create_join_notification(self, db: AsyncSession, user_id: int, webinar: models.Webinar):
+    async def _create_join_notification(self, db: AsyncSession, user_id: int, webinar: models.Webinar, role: str):
         """Создание уведомления о присоединении к вебинару"""
         try:
             from src.services.notification_service import notification_service
+
+            role_text = "создателем" if role == "creator" else "участником"
 
             await notification_service.create_notification(
                 db=db,
                 user_id=user_id,
                 title="🎯 Вы присоединились к вебинару",
-                message=f'Вы успешно присоединились к вебинару "{webinar.title}"',
+                message=f'Вы успешно присоединились к вебинару "{webinar.title}" как {role_text}',
                 notification_type="webinar_joined",
                 related_entity_type="webinar",
                 related_entity_id=webinar.id,
                 meta_data={
                     "webinar_title": webinar.title,
-                    "joined_at": datetime.now().isoformat()
+                    "joined_at": datetime.now().isoformat(),
+                    "role": role
                 }
             )
 
         except Exception as e:
             logger.error(f"Error creating join notification: {e}")
+
+    async def get_webinar_room_info(self, webinar_id: int) -> Dict[str, Any]:
+        """Получение информации о комнате вебинара"""
+        try:
+            return {
+                "webinar_id": webinar_id,
+                "room_name": f"webinar_{webinar_id}",
+                "livekit_available": LIVEKIT_AVAILABLE
+            }
+        except Exception as e:
+            logger.error(f"Error getting webinar room info: {e}")
+            return {
+                "webinar_id": webinar_id,
+                "error": str(e)
+            }
 
 
 webinar_service = WebinarService()

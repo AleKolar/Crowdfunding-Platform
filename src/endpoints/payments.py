@@ -63,7 +63,7 @@ async def stripe_webhook(
             detail="Missing stripe-signature header"
         )
 
-    result = await payment_service.handle_webhook(db, payload, sig_header)  # ← ДОБАВИЛИ сессию
+    result = await payment_service.handle_webhook(db, payload, sig_header)
     return result
 
 
