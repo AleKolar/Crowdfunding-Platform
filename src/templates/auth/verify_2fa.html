@@ -17,11 +17,14 @@
                     <input type="hidden" id="user_email" name="email">
 
                     <div class="mb-4">
-                        <label for="sms_code" class="form-label">🔐 Код подтверждения (6 цифр)</label>
-                        <input type="text" class="form-control" id="sms_code" name="sms_code"
-                               placeholder="123456" pattern="[0-9]{6}" maxlength="6" required>
+                        <label for="verification_code" class="form-label">
+                            🔐 Код подтверждения (6 цифр)
+                        </label>
+                        <input type="text" class="form-control" id="verification_code" name="verification_code"
+                            placeholder="123456" pattern="[0-9]{6}" maxlength="6" required>
                         <div class="form-text">
-                            Код отправлен по SMS на телефон и по Email. Действителен 10 минут.
+                            ✅ Код отправлен по SMS на телефон <strong>И</strong> по Email.
+                            Используйте любой из полученных кодов.
                         </div>
                     </div>
 
@@ -68,8 +71,9 @@ document.getElementById('verify2faForm').addEventListener('submit', async functi
 
     const formData = new FormData(this);
     const data = {
+        user_id: parseInt(localStorage.getItem('login_user_id')),
         email: formData.get('email'),
-        sms_code: formData.get('sms_code')
+        verification_code: formData.get('verification_code')
     };
 
     try {

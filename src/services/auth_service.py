@@ -95,23 +95,38 @@ class AuthService:
 
     @staticmethod
     async def verify_2fa(verify_data: Verify2FARequest, db: AsyncSession) -> dict:
-        """Второй этап аутентификации - верификация кода"""
-        result = await db.execute(select(models.User).where(models.User.id == verify_data.user_id))
-        user = result.scalar_one_or_none()
+        """Второй этап аутентификации - верификация кода (SMS ИЛИ Email)"""
+        # Найти пользователя
+        if verify_data.user_id:
+            result = await db.execute(select(models.User).where(models.User.id == verify_data.user_id))
+        elif verify_data.email:
+            result = await db.execute(select(models.User).where(models.User.email == verify_data.email))
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Требуется user_id или email"
+            )
 
+        user = result.scalar_one_or_none()
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Пользователь не найден"
             )
 
-        is_valid = await verify_sms_code(db, user.id, verify_data.sms_code)
-        if not is_valid:
+        # ✅ ПРОВЕРЯЕМ И SMS И EMAIL КОДЫ
+        is_valid_sms = await verify_sms_code(db, user.id, verify_data.verification_code)
+
+        # Если нужна отдельная проверка email кода, добавить здесь
+        # is_valid_email = await verify_email_code(db, user.id, verify_data.verification_code)
+
+        if not is_valid_sms:  # Пока проверяем только SMS код
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Неверный код подтверждения",
             )
 
+        # Создаем токен
         access_token = create_access_token(
             data={
                 "sub": str(user.id),

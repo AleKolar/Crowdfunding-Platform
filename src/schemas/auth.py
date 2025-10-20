@@ -1,4 +1,6 @@
 # src/schemas/auth.py
+from typing import Optional
+
 from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from datetime import datetime
 import re
@@ -57,8 +59,9 @@ class UserLogin(BaseModel):
 
 class Verify2FARequest(BaseModel):
     """Схема верификации 2FA"""
-    user_id: int
-    sms_code: str
+    user_id: Optional[int] = None
+    email: Optional[str] = None
+    verification_code: str
 
     model_config = ConfigDict(from_attributes=True)
 
