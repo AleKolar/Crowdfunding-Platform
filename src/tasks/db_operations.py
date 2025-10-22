@@ -3,8 +3,8 @@ import logging
 from sqlalchemy import create_engine, select, and_
 from sqlalchemy.orm import sessionmaker
 
-from src.config.settings import settings
 from src.database import models
+from src.security.config import settings
 
 logger = logging.getLogger(__name__)
 

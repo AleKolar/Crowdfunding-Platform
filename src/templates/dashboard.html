@@ -15,20 +15,23 @@
                 <p><strong>ID:</strong> <span id="user-id">-</span></p>
                 <p><strong>Email:</strong> <span id="user-email">-</span></p>
                 <p><strong>Статус:</strong> <span id="user-status" class="badge bg-secondary">Не авторизован</span></p>
+                <p><strong>Токен:</strong> <span id="token-status" class="badge bg-secondary">Отсутствует</span></p>
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
                 <h5>🔔 Быстрые действия</h5>
             </div>
             <div class="card-body">
-                <button id="test-auth-btn" class="btn btn-primary mb-2 w-100">Тест регистрации</button>
-                <button id="get-projects-btn" class="btn btn-success mb-2 w-100">Получить проекты</button>
-                <button id="get-webinars-btn" class="btn btn-info mb-2 w-100">Получить вебинары</button>
-                <button id="test-protected-btn" class="btn btn-warning mb-2 w-100">Тест защищенного эндпоинта</button>
+                <button id="full-auth-btn" class="btn btn-primary mb-2 w-100">Полная регистрация + логин</button>
+                <button id="get-profile-btn" class="btn btn-success mb-2 w-100">Получить профиль (/auth/me)</button>
+                <button id="check-token-btn" class="btn btn-info mb-2 w-100">Проверить токен</button>
+                <button id="debug-codes-btn" class="btn btn-secondary mb-2 w-100">Показать SMS коды</button>
+                <button id="get-projects-btn" class="btn btn-warning mb-2 w-100">Получить проекты</button>
+                <button id="clear-token-btn" class="btn btn-danger mb-2 w-100">Очистить токен</button>
             </div>
         </div>
     </div>
@@ -56,17 +59,31 @@
 // Базовые функции для работы с API
 const API_BASE = 'http://localhost:8000';
 
+// Хранилище токена
+let currentToken = localStorage.getItem('access_token');
+
 function logResult(message) {
     const results = document.getElementById('api-results');
     results.textContent += `\n${new Date().toLocaleTimeString()}: ${message}`;
     results.scrollTop = results.scrollHeight;
 }
 
-async function testAuth() {
-    try {
-        logResult('🔐 Тестируем аутентификацию...');
+function updateTokenStatus() {
+    const tokenStatus = document.getElementById('token-status');
+    if (currentToken) {
+        tokenStatus.textContent = 'Есть';
+        tokenStatus.className = 'badge bg-success';
+    } else {
+        tokenStatus.textContent = 'Отсутствует';
+        tokenStatus.className = 'badge bg-danger';
+    }
+}
 
-        // Тест регистрации
+async function fullAuthFlow() {
+    try {
+        logResult('🔐 Запускаем полную регистрацию и логин...');
+
+        // 1. РЕГИСТРАЦИЯ
         const registerData = {
             email: `test_${Date.now()}@example.com`,
             phone: `+7999${Date.now().toString().slice(-7)}`,
@@ -75,25 +92,190 @@ async function testAuth() {
             secret_code: "1234"
         };
 
+        logResult(`📝 Регистрируем пользователя: ${registerData.email}`);
+
         const registerResponse = await fetch(`${API_BASE}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(registerData)
         });
 
-        if (registerResponse.ok) {
-            const registerResult = await registerResponse.json();
-            logResult(`✅ Регистрация успешна! User ID: ${registerResult.user_id}`);
-
-            // Обновляем информацию о пользователе
-            document.getElementById('user-id').textContent = registerResult.user_id;
-            document.getElementById('user-email').textContent = registerData.email;
-            document.getElementById('user-status').textContent = 'Зарегистрирован';
-            document.getElementById('user-status').className = 'badge bg-success';
-
-        } else {
+        if (!registerResponse.ok) {
             const error = await registerResponse.json();
             logResult(`❌ Ошибка регистрации: ${error.detail}`);
+            return;
+        }
+
+        const registerResult = await registerResponse.json();
+        logResult(`✅ Регистрация успешна! User ID: ${registerResult.user_id}`);
+
+        // 2. ЛОГИН (первый этап)
+        logResult('🔐 Первый этап логина...');
+        const loginResponse = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: registerData.email,
+                secret_code: registerData.secret_code
+            })
+        });
+
+        if (!loginResponse.ok) {
+            const error = await loginResponse.json();
+            logResult(`❌ Ошибка логина: ${error.detail}`);
+            return;
+        }
+
+        const loginResult = await loginResponse.json();
+        logResult(`✅ Логин успешен! Требуется 2FA: ${loginResult.requires_2fa}`);
+
+        // 3. ПОЛУЧАЕМ РЕАЛЬНЫЙ КОД ИЗ БАЗЫ
+        logResult('🔍 Получаем реальный код из базы...');
+        const codesResponse = await fetch(`${API_BASE}/auth/debug-sms-codes`);
+        if (codesResponse.ok) {
+            const codesData = await codesResponse.json();
+            const activeCode = codesData.sms_codes.find(code =>
+                code.user_id === registerResult.user_id && !code.is_used
+            );
+
+            if (activeCode) {
+                logResult(`🔢 Найден код в базе: ${activeCode.code}`);
+
+                // 4. 2FA ВЕРИФИКАЦИЯ С РЕАЛЬНЫМ КОДОМ
+                logResult('🔐 Второй этап: верификация 2FA с реальным кодом...');
+                const verifyResponse = await fetch(`${API_BASE}/auth/verify-2fa`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: registerResult.user_id,
+                        verification_code: activeCode.code  // РЕАЛЬНЫЙ КОД!
+                    })
+                });
+
+                if (verifyResponse.ok) {
+                    const verifyResult = await verifyResponse.json();
+
+                    // СОХРАНЯЕМ ТОКЕН
+                    currentToken = verifyResult.access_token;
+                    localStorage.setItem('access_token', currentToken);
+
+                    logResult(`✅ 2FA успешно! Токен получен и сохранен`);
+                    logResult(`🔑 Токен: ${currentToken.substring(0, 50)}...`);
+
+                    // Обновляем UI
+                    updateTokenStatus();
+                    document.getElementById('user-id').textContent = registerResult.user_id;
+                    document.getElementById('user-email').textContent = registerData.email;
+                    document.getElementById('user-status').textContent = 'Авторизован';
+                    document.getElementById('user-status').className = 'badge bg-success';
+                } else {
+                    const error = await verifyResponse.json();
+                    logResult(`❌ Ошибка 2FA: ${error.detail}`);
+                }
+            } else {
+                logResult('❌ Не найден активный код в базе');
+            }
+        } else {
+            logResult('❌ Не удалось получить коды из базы');
+        }
+
+    } catch (error) {
+        logResult(`💥 Ошибка: ${error.message}`);
+    }
+}
+
+async function getProfile() {
+    try {
+        if (!currentToken) {
+            logResult('❌ Нет токена! Сначала выполните авторизацию.');
+            return;
+        }
+
+        logResult('👤 Получаем профиль пользователя через /auth/me...');
+
+        const response = await fetch(`${API_BASE}/auth/me`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const profile = await response.json();
+            logResult(`✅ Профиль получен: ${JSON.stringify(profile, null, 2)}`);
+
+            // ОБНОВЛЯЕМ ИНФОРМАЦИЮ НА ДАШБОРДЕ
+            document.getElementById('user-id').textContent = profile.user_id;
+            document.getElementById('user-email').textContent = profile.email;
+            document.getElementById('user-status').textContent = 'Авторизован';
+            document.getElementById('user-status').className = 'badge bg-success';
+        } else {
+            const error = await response.json();
+            logResult(`❌ Ошибка получения профиля: ${error.detail}`);
+
+            // Если токен невалиден - очищаем
+            if (error.detail.includes("Could not validate credentials")) {
+                clearToken();
+            }
+        }
+    } catch (error) {
+        logResult(`💥 Ошибка: ${error.message}`);
+    }
+}
+
+async function checkCurrentToken() {
+    try {
+        if (!currentToken) {
+            logResult('❌ Нет токена!');
+            return;
+        }
+
+        logResult('🔍 Проверяем текущий токен...');
+
+        // Декодируем payload
+        try {
+            const payload = JSON.parse(atob(currentToken.split('.')[1]));
+            logResult(`📋 Payload токена: ${JSON.stringify(payload, null, 2)}`);
+        } catch (e) {
+            logResult(`❌ Ошибка декодирования: ${e.message}`);
+        }
+
+        // Проверяем через protected эндпоинт
+        const response = await fetch(`${API_BASE}/auth/me`, {
+            headers: {
+                'Authorization': `Bearer ${currentToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const userData = await response.json();
+            logResult(`✅ Токен валиден! Данные пользователя: ${JSON.stringify(userData, null, 2)}`);
+
+            // ОБНОВЛЯЕМ ИНФОРМАЦИЮ НА ДАШБОРДЕ
+            document.getElementById('user-id').textContent = userData.user_id;
+            document.getElementById('user-email').textContent = userData.email;
+            document.getElementById('user-status').textContent = 'Авторизован';
+            document.getElementById('user-status').className = 'badge bg-success';
+        } else {
+            const error = await response.json();
+            logResult(`❌ Токен невалиден: ${error.detail}`);
+        }
+    } catch (error) {
+        logResult(`💥 Ошибка: ${error.message}`);
+    }
+}
+
+async function debugSmsCodes() {
+    try {
+        logResult('🔍 Получаем SMS коды из базы...');
+        const response = await fetch(`${API_BASE}/auth/debug-sms-codes`);
+        if (response.ok) {
+            const codesData = await response.json();
+            logResult(`📋 SMS коды: ${JSON.stringify(codesData, null, 2)}`);
+        } else {
+            logResult('❌ Не удалось получить коды');
         }
     } catch (error) {
         logResult(`💥 Ошибка: ${error.message}`);
@@ -104,7 +286,12 @@ async function getProjects() {
     try {
         logResult('📊 Получаем список проектов...');
 
-        const response = await fetch(`${API_BASE}/projects/`);
+        const headers = {};
+        if (currentToken) {
+            headers['Authorization'] = `Bearer ${currentToken}`;
+        }
+
+        const response = await fetch(`${API_BASE}/projects/`, { headers });
 
         if (response.ok) {
             const projects = await response.json();
@@ -119,33 +306,29 @@ async function getProjects() {
     }
 }
 
-async function getWebinars() {
-    try {
-        logResult('🎥 Получаем список вебинаров...');
-
-        const response = await fetch(`${API_BASE}/webinars/announcements`);
-
-        if (response.ok) {
-            const webinars = await response.json();
-            logResult(`✅ Получено анонсов вебинаров: ${webinars.count}`);
-            logResult(JSON.stringify(webinars, null, 2));
-        } else {
-            const error = await response.json();
-            logResult(`❌ Ошибка получения вебинаров: ${error.detail}`);
-        }
-    } catch (error) {
-        logResult(`💥 Ошибка: ${error.message}`);
-    }
+function clearToken() {
+    currentToken = null;
+    localStorage.removeItem('access_token');
+    logResult('🗑️ Токен очищен');
+    updateTokenStatus();
+    document.getElementById('user-id').textContent = '-';
+    document.getElementById('user-email').textContent = '-';
+    document.getElementById('user-status').textContent = 'Не авторизован';
+    document.getElementById('user-status').className = 'badge bg-secondary';
 }
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', function() {
     logResult('🚀 Дашборд загружен! Используйте кнопки для тестирования API.');
+    updateTokenStatus();
 
     // Добавляем обработчики для всех кнопок
-    document.getElementById('test-auth-btn').addEventListener('click', testAuth);
+    document.getElementById('full-auth-btn').addEventListener('click', fullAuthFlow);
+    document.getElementById('get-profile-btn').addEventListener('click', getProfile);
+    document.getElementById('check-token-btn').addEventListener('click', checkCurrentToken);
+    document.getElementById('debug-codes-btn').addEventListener('click', debugSmsCodes);
     document.getElementById('get-projects-btn').addEventListener('click', getProjects);
-    document.getElementById('get-webinars-btn').addEventListener('click', getWebinars);
+    document.getElementById('clear-token-btn').addEventListener('click', clearToken);
 });
 </script>
 {% endblock %}

@@ -1,4 +1,5 @@
 # src/services/webinar_service.py
+from src.security.config import settings
 from src.services.notification_service import notification_service
 import logging
 from datetime import datetime, timedelta
@@ -8,7 +9,6 @@ from sqlalchemy import select
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config.settings import settings
 from src.database import models
 from src.services.notification_service import notification_service
 from src.services.template_service import template_service

@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 import logging
 import asyncio
 
-from src.config.settings import settings
 from src.database import models
+from src.security.config import settings
 from src.services.email_service import email_service
 
 from src.services.template_service import template_service

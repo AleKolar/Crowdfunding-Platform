@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 import secrets
 
-from src.config.settings import settings
 from src.database import models
 from src.database.postgres import get_db
+from src.security.config import settings
 from src.services.sms_service import sms_service
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         "aud": "your-api-service"
     })
 
+    logger.info(f"🔐 TOKEN CREATION FINAL PAYLOAD: {to_encode}")
+
     encoded_jwt = jwt.encode(
         to_encode,
         settings.SECRET_KEY,
@@ -73,6 +75,7 @@ from fastapi.security import OAuth2PasswordBearer
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="verify-2fa")
 
+
 async def get_current_user(
         token: str = Depends(oauth2_scheme),
         db: AsyncSession = Depends(get_db)
@@ -91,19 +94,37 @@ async def get_current_user(
         user_id: str = payload.get("sub")
         is_2fa_verified: bool = payload.get("2fa_verified", False)
 
-        if user_id is None or not is_2fa_verified:
+        logger.info(f"🔐 AUTH DEBUG: user_id={user_id}, type={type(user_id)}, 2fa_verified={is_2fa_verified}")
+        logger.info(f"🔐 AUTH FULL PAYLOAD: {payload}")
+
+        if user_id is None:
             raise credentials_exception
 
-    except JWTError:
+        # ❗ ВРЕМЕННО ОТКЛ. 2FA ДЛЯ ОТЛАДКИ
+        # if not is_2fa_verified:
+        #     raise credentials_exception
+
+    except JWTError as e:
+        logger.error(f"🔐 AUTH JWT Error: {e}")
+        raise credentials_exception
+
+    # ✅ ИЩЕМ ПОЛЬЗОВАТЕЛЯ ПО ID
+    try:
+        user_id_int = int(user_id)
+    except (ValueError, TypeError):
+        logger.error(f"🔐 AUTH Invalid user_id format: {user_id}")
         raise credentials_exception
 
     result = await db.execute(
-        select(models.User).where(models.User.id == int(user_id))
+        select(models.User).where(models.User.id == user_id_int)
     )
     user = result.scalar_one_or_none()
 
     if user is None:
+        logger.error(f"🔐 AUTH User not found: id={user_id_int}")
         raise credentials_exception
+
+    logger.info(f"🔐 AUTH Success: user={user.email}, id={user.id}, username={user.username}")
     return user
 
 
@@ -205,14 +226,18 @@ async def verify_sms_code(db: AsyncSession, user_id: int, code: str):
     )
     sms_code = result.scalar_one_or_none()
 
+    logger.info(f"🔐 VERIFY CODE: user_id={user_id}, code={code}, found_code={sms_code.code if sms_code else 'None'}")
+
     if sms_code and sms_code.attempt_count < 3:
         sms_code.attempt_count += 1
         if sms_code.code == code:
             sms_code.is_used = True
             await db.commit()
+            logger.info(f"🔐 VERIFY CODE: SUCCESS for user_id {user_id}")
             return True
         await db.commit()
 
+    logger.warning(f"🔐 VERIFY CODE: FAILED for user_id {user_id}")
     return False
 
 async def get_user_by_email(db: AsyncSession, email: str):

@@ -1,8 +1,10 @@
 # src/database/redis_client.py
 import redis.asyncio as redis
-from src.config.settings import settings
+
 import json
 from typing import Optional, Any
+
+from src.security.config import settings
 
 
 class RedisManager:

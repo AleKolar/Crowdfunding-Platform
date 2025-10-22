@@ -7,8 +7,9 @@ from typing import List, Dict, Any, Optional, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, Row, RowMapping
 
-from src.config.settings import settings
+
 from src.database import models
+from src.security.config import settings
 
 logger = logging.getLogger(__name__)
 

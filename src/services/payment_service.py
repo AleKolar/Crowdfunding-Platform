@@ -6,12 +6,12 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 
-from src.config.settings import settings
 from src.repository.donations_repository import donations_repository
 from src.repository.transactions_repository import transactions_repository
 from src.repository.wallets_repository import wallets_repository
 from src.repository.projects_repository import projects_repository
 from src.schemas.payment import DonationCreate, TransactionCreate, TransactionUpdate, DonationUpdate, DonationStatus
+from src.security.config import settings
 
 logger = logging.getLogger(__name__)
 

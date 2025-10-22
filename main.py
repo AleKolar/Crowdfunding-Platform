@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from typing import cast, Any
 
 from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -259,15 +259,30 @@ async def verify_2fa_page(request: Request):
 # Дополнительные HTML страницы
 @app.get("/projects-page", response_class=HTMLResponse)
 async def projects_page(request: Request):
-    return templates.TemplateResponse("projects.html", {"request": request})
+    try:
+        return templates.TemplateResponse("projects.html", {"request": request})
+    except Exception as e:
+        logger.exception("Страница в разработке: %s", e)
+
+        raise HTTPException(status_code=503, detail="Страница в разработке")
 
 @app.get("/webinars-page", response_class=HTMLResponse)
 async def webinars_page(request: Request):
-    return templates.TemplateResponse("webinars.html", {"request": request})
+    try:
+        return templates.TemplateResponse("webinars.html", {"request": request})
+    except Exception as e:
+        logger.exception("Страница в разработке: %s", e)
+
+        raise HTTPException(status_code=503, detail="Страница в разработке")
 
 @app.get("/comments-page", response_class=HTMLResponse)
 async def comments_page(request: Request):
-    return templates.TemplateResponse("comments.html", {"request": request})
+    try:
+        return templates.TemplateResponse("comments.html", {"request": request})
+    except Exception as e:
+        logger.exception("Страница в разработке: %s", e)
+
+        raise HTTPException(status_code=503, detail="Страница в разработке")
 
 
 # ========== ПОТОМ API ЭНДПОИНТЫ ==========

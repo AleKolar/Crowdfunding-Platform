@@ -3,10 +3,12 @@ import smtplib
 import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from src.config.settings import settings
+
 import logging
 from typing import Optional
 import re
+
+from src.security.config import settings
 
 logger = logging.getLogger(__name__)
 

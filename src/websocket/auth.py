@@ -2,8 +2,8 @@
 from typing import Optional
 
 from jose import JWTError, jwt
-from src.config.settings import settings
 
+from src.security.config import settings
 
 async def authenticate_websocket(token: str) -> Optional[int]:
     """Аутентификация WebSocket соединения"""

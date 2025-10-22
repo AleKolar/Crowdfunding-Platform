@@ -1,6 +1,6 @@
 # src/database/postgres.py
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from src.config.settings import settings
+from src.security.config import settings
 from .models import Base
 
 # Асинхронный engine
