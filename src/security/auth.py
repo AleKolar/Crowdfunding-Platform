@@ -47,7 +47,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         "aud": "your-api-service"
     })
 
-    logger.info(f"🔐 TOKEN CREATION FINAL PAYLOAD: {to_encode}")
+    logger.info(f"🔐 CREATE_TOKEN: SECRET_KEY = {settings.SECRET_KEY}")
+    logger.info(f"🔐 CREATE_TOKEN: SECRET_KEY length = {len(settings.SECRET_KEY)}")
+    logger.info(f"🔐 CREATE_TOKEN: ALGORITHM = {settings.ALGORITHM}")
 
     encoded_jwt = jwt.encode(
         to_encode,
@@ -85,6 +87,10 @@ async def get_current_user(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
     )
+
+    logger.info(f"🔐 GET_CURRENT_USER: SECRET_KEY = {settings.SECRET_KEY}")
+    logger.info(f"🔐 GET_CURRENT_USER: SECRET_KEY length = {len(settings.SECRET_KEY)}")
+
     try:
         payload = jwt.decode(
             token,

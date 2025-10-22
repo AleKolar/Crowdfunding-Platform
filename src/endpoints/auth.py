@@ -158,6 +158,17 @@ async def debug_sms_codes(db: AsyncSession = Depends(get_db)):
         ]
     }
 
+@auth_router.get("/debug-secret")
+async def debug_secret():
+    """Проверка SECRET_KEY"""
+    return {
+        "secret_key_from_settings": settings.SECRET_KEY,
+        "secret_key_length": len(settings.SECRET_KEY),
+        "algorithm": settings.ALGORITHM,
+        "expected_secret": "i5GSOGVbEN7l-UJRAoS2Uxjw0s8YU3oKdWMeQGCaw1M",
+        "match": settings.SECRET_KEY == "i5GSOGVbEN7l-UJRAoS2Uxjw0s8YU3oKdWMeQGCaw1M"
+    }
+
 @auth_router.post("/logout")
 async def logout():
     """

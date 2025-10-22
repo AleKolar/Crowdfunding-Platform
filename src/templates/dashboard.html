@@ -162,6 +162,17 @@ async function fullAuthFlow() {
                     logResult(`✅ 2FA успешно! Токен получен и сохранен`);
                     logResult(`🔑 Токен: ${currentToken.substring(0, 50)}...`);
 
+                    // ✅ ДОБАВЛЕННЫЙ КОД ДЛЯ ОТЛАДКИ
+                    logResult(`🔑 Новый токен создан: ${currentToken}`);
+
+                    // Декодируем и показываем payload
+                    try {
+                        const payload = JSON.parse(atob(currentToken.split('.')[1]));
+                        logResult(`📋 Payload нового токена: ${JSON.stringify(payload, null, 2)}`);
+                    } catch (e) {
+                        logResult(`❌ Ошибка декодирования: ${e.message}`);
+                    }
+
                     // Обновляем UI
                     updateTokenStatus();
                     document.getElementById('user-id').textContent = registerResult.user_id;
