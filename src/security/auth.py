@@ -44,7 +44,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         "exp": expire,
         "2fa_verified": True,
         "iss": "your-auth-service",
-        "aud": "your-api-service"
+        "audience": "your-api-service"
     })
 
     logger.info(f"🔐 CREATE_TOKEN: SECRET_KEY = {settings.SECRET_KEY}")
@@ -64,7 +64,7 @@ def verify_token(token: str):
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
-            audience="your-api-service"
+            audience="your-api-service"   # важно!!!
         )
         return payload
     except JWTError as e:
@@ -79,8 +79,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="verify-2fa")
 
 
 async def get_current_user(
-        token: str = Depends(oauth2_scheme),
-        db: AsyncSession = Depends(get_db)
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
 ):
     """Получение текущего пользователя с проверкой 2FA статуса"""
     credentials_exception = HTTPException(
@@ -88,33 +88,28 @@ async def get_current_user(
         detail="Could not validate credentials",
     )
 
-    logger.info(f"🔐 GET_CURRENT_USER: SECRET_KEY = {settings.SECRET_KEY}")
-    logger.info(f"🔐 GET_CURRENT_USER: SECRET_KEY length = {len(settings.SECRET_KEY)}")
+    # ⚠️ УДАЛИТЕ эти строки — они логируют секретный ключ!
+    # logger.info(f"🔐 GET_CURRENT_USER: SECRET_KEY = {settings.SECRET_KEY}")
+    # logger.info(f"🔐 GET_CURRENT_USER: SECRET_KEY length = {len(settings.SECRET_KEY)}")
 
     try:
-        payload = jwt.decode(
-            token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM]
-        )
-        user_id: str = payload.get("sub")
-        is_2fa_verified: bool = payload.get("2fa_verified", False)
-
-        logger.info(f"🔐 AUTH DEBUG: user_id={user_id}, type={type(user_id)}, 2fa_verified={is_2fa_verified}")
-        logger.info(f"🔐 AUTH FULL PAYLOAD: {payload}")
-
-        if user_id is None:
-            raise credentials_exception
-
-        # ❗ ВРЕМЕННО ОТКЛ. 2FA ДЛЯ ОТЛАДКИ
-        # if not is_2fa_verified:
-        #     raise credentials_exception
-
-    except JWTError as e:
-        logger.error(f"🔐 AUTH JWT Error: {e}")
+        payload = verify_token(token)   # теперь verify_token проверяет audience
+    except HTTPException:
+        # verify_token уже бросил 401 с деталями, но мы хотим единообразное сообщение
         raise credentials_exception
 
-    # ✅ ИЩЕМ ПОЛЬЗОВАТЕЛЯ ПО ID
+    user_id: str = payload.get("sub")
+    is_2fa_verified: bool = payload.get("2fa_verified", False)
+
+    logger.info(f"🔐 AUTH DEBUG: user_id={user_id}, 2fa_verified={is_2fa_verified}")
+
+    if user_id is None:
+        raise credentials_exception
+
+    # ❗ ВРЕМЕННО ОТКЛ. 2FA ДЛЯ ОТЛАДКИ — перед деплоем раскомментировать
+    # if not is_2fa_verified:
+    #     raise credentials_exception
+
     try:
         user_id_int = int(user_id)
     except (ValueError, TypeError):
@@ -130,7 +125,7 @@ async def get_current_user(
         logger.error(f"🔐 AUTH User not found: id={user_id_int}")
         raise credentials_exception
 
-    logger.info(f"🔐 AUTH Success: user={user.email}, id={user.id}, username={user.username}")
+    logger.info(f"🔐 AUTH Success: user={user.email}, id={user.id}")
     return user
 
 
