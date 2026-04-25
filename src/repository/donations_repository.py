@@ -88,3 +88,4 @@ class DonationsRepository(BaseRepository[Donation, DonationCreate, DonationUpdat
 
 
 donations_repository = DonationsRepository()
+

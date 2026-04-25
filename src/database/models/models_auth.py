@@ -1,7 +1,7 @@
 # src/database/models/models_auth.py
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+from datetime import datetime
 from .base import Base
 
 

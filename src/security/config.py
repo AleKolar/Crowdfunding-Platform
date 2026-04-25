@@ -106,7 +106,5 @@ class Settings:
         if len(cls.SECRET_KEY) < 32:
             raise ValueError("SECRET_KEY должен быть не менее 32 символов")
 
-
-# Инициализация настроек
 settings = Settings()
 settings.validate_config()

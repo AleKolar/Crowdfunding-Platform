@@ -232,7 +232,7 @@ async def verify_sms_code(db: AsyncSession, user_id: int, code: str):
     )
     sms_code = result.scalar_one_or_none()
 
-    logger.info(f"🔐 VERIFY CODE: user_id={user_id}, code={code}, found_code={sms_code.code if sms_code else 'None'}")
+    ### NEVER do loggin SECRET KEY: logger.info(f"🔐 VERIFY CODE: user_id={user_id}, code={code}, found_code={sms_code.code if sms_code else 'None'}")
 
     if sms_code and sms_code.attempt_count < 3:
         sms_code.attempt_count += 1
