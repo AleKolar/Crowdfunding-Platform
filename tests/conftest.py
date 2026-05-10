@@ -135,6 +135,7 @@ def mock_verification_codes():
         mock.return_value = {
             "sms_code": "123456",
             "email_code": "123456",
+            "code": "123456",
             "sms_sent": True,
             "email_sent": True
         }
@@ -148,6 +149,7 @@ def mock_external_services():
         mock_verification.return_value = AsyncMock(return_value={
             "sms_code": "123456",
             "email_code": "123456",
+            "code": "123456",
             "sms_sent": True,
             "email_sent": True
         })
@@ -265,6 +267,7 @@ def current_user_mock():
             self.email = "test@example.com"
             self.username = "testuser"
             self.is_active = True
+            self.is_2fa_enabled = True
             self.phone = "+79991234567"
 
     return MockUser()
@@ -309,6 +312,7 @@ async def client() -> TestClient:
                 self.email = 'test@example.com'
                 self.username = 'testuser'
                 self.is_active = True
+                self.is_2fa_enabled = True
                 self.phone = '+79991234567'
 
         return MockUser()

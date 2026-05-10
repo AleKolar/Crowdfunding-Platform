@@ -23,6 +23,7 @@ async def test_user_login_success(client: TestClient, db_session, test_user):
         mock_verification.return_value = AsyncMock(return_value={
             "sms_code": "123456",
             "email_code": "123456",
+            "code": "123456",
             "sms_sent": True,
             "email_sent": True
         })
@@ -88,6 +89,7 @@ async def test_user_login_direct_auth_service(client: TestClient, db_session, te
         mock_verification.return_value = AsyncMock(return_value={
             "sms_code": "123456",
             "email_code": "123456",
+            "code": "123456",
             "sms_sent": True,
             "email_sent": True
         })

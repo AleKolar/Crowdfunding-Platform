@@ -74,7 +74,12 @@ async def resend_verification_code(
     result = await generate_and_send_verification_codes(db, user)
 
     # ✅ Для совместимости с фронтендом возвращаем оба ключа
-    verification_code = result["code"]
+    verification_code = result.get("code") or result.get("sms_code") or result.get("email_code")
+    if not verification_code:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось сформировать код подтверждения"
+        )
 
     return {
         "message": "Новые коды подтверждения отправлены по SMS и Email",

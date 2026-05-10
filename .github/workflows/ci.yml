@@ -52,7 +52,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov coveralls pytest-html
+        pip install pytest-cov coveralls pytest-html
 
     - name: Run tests with coverage
       env:
