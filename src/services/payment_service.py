@@ -16,6 +16,17 @@ from src.security.config import settings
 logger = logging.getLogger(__name__)
 
 
+def get_stripe_signature_error_class():
+    """Возвращает класс исключения Stripe SignatureVerificationError для текущей версии библиотеки."""
+    if hasattr(stripe, "SignatureVerificationError"):
+        return stripe.SignatureVerificationError
+    if hasattr(stripe, "error") and hasattr(stripe.error, "SignatureVerificationError"):
+        return stripe.error.SignatureVerificationError
+    if hasattr(stripe, "_error") and hasattr(stripe._error, "SignatureVerificationError"):
+        return stripe._error.SignatureVerificationError
+    return None
+
+
 class PaymentService:
     def __init__(self):
         stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -213,9 +224,12 @@ class PaymentService:
         except ValueError as e:
             logger.error(f"Invalid payload: {e}")
             raise HTTPException(status_code=400, detail="Invalid payload")
-        except stripe.SignatureVerificationError as e:
-            logger.error(f"Invalid signature: {e}")
-            raise HTTPException(status_code=400, detail="Invalid signature")
+        except Exception as e:
+            stripe_signature_error = get_stripe_signature_error_class()
+            if stripe_signature_error and isinstance(e, stripe_signature_error):
+                logger.error(f"Invalid signature: {e}")
+                raise HTTPException(status_code=400, detail="Invalid signature")
+            raise
 
     async def _handle_payment_failure(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """Обработка неудачного платежа"""
